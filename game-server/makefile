@@ -1,0 +1,25 @@
+##
+# Project Title
+#
+# @file
+# @version 0.1
+
+CXX=g++
+CXXFLAGS=-I -Wall -std=c++17 -g -pthread
+DEPS = server.hh
+OBJ = server.cc
+MAINOBJ = main.o $(OBJ)
+
+%.o: %.cc $(DEPS)
+		$(CXX) -c -o $@ $< $(CXXFLAGS)
+
+server: $(MAINOBJ)
+		$(CXX) -o $@ $^ $(CXXFLAGS)
+
+client:
+		$(CXX) -o $@ client.cc $(CXXFLAGS)
+
+clean:
+	rm -rf **/*.o
+
+# end
