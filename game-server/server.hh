@@ -10,6 +10,7 @@ using namespace std;
 
 #define QUEUE_SIZE 5
 #define MESSAGE_SIZE 255
+#define PORTNO "42069"
 
 static vector<thread> threads; /**< Stores all threads created by the server */
 static std::mutex thread_list_mutex;
@@ -30,6 +31,6 @@ void print_players();
 ** @brief Launches the server
 **
 */
-void run_server(int);
+void run_server();
 
 #endif // SERVER_H_
