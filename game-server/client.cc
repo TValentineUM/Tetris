@@ -85,8 +85,8 @@ int main(int argc, char *argv[]) {
   // Read response from server response
   printf("%s\n", buffer);
 
-  while (1) {
-  }
+  while (1)
+    ;
 
   // All done, close socket
   close(sockfd);

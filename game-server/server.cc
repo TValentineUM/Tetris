@@ -1,7 +1,6 @@
 #include "server.hh"
 #include <exception>
 #include <iostream>
-#include <netdb.h> // addrinfo
 #include <netinet/in.h>
 #include <stdio.h>
 #include <stdlib.h>
@@ -12,30 +11,24 @@
 #include <unistd.h>
 using namespace std;
 
-void run_server() {
+void run_server(int portno) {
+  int sockfd, newsockfd, clilen, pid;
+  struct sockaddr_in serv_addr, cli_addr;
 
-  struct sockaddr_storage their_addr;
-  socklen_t addr_size;
-  struct addrinfo hints, *res;
-  int sockfd, new_fd;
-
-  // Loading up address structs
-  memset(&hints, 0, sizeof hints);
-  hints.ai_family = AF_UNSPEC; // USE IPV4 or IPV6
-  hints.ai_socktype = SOCK_STREAM;
-  hints.ai_flags = AI_PASSIVE; // Fill in my IP
-
-  if (getaddrinfo(NULL, PORTNO, &hints, &res) != 0) {
-    throw runtime_error(string(gai_strerror(errno)));
-  }
-
-  if ((sockfd = socket(res->ai_family, res->ai_socktype, res->ai_protocol)) <
-      0) {
+  // Get port from command line
+  // Create server socket (AF_INET, SOCK_STREAM)
+  if ((sockfd = socket(AF_INET, SOCK_STREAM, 0)), 0) {
     throw runtime_error("ERROR opening socket");
   }
 
+  // Initialize socket structure
+  memset(&serv_addr, 0, sizeof(serv_addr));
+  serv_addr.sin_family = AF_INET;
+  serv_addr.sin_addr.s_addr = INADDR_ANY;
+  serv_addr.sin_port = htons(portno);
+
   // Bind the host address
-  if (bind(sockfd, res->ai_addr, res->ai_addrlen) < 0) {
+  if (bind(sockfd, (struct sockaddr *)&serv_addr, sizeof(serv_addr)) < 0) {
     close(sockfd);
     throw runtime_error("Error on binding");
   }
@@ -43,35 +36,41 @@ void run_server() {
   // Start listening for the clients
   listen(sockfd, QUEUE_SIZE);
 
-  addr_size = sizeof their_addr;
-
+  // Infinite loop
+  clilen = sizeof(cli_addr);
+  vector<thread> current_threads;
+  vector<int> sockets_open;
   while (1) {
 
     // Accept connection form a client
-    if ((new_fd = accept(sockfd, (struct sockaddr *)&their_addr, &addr_size)) <
-        0) {
+    newsockfd =
+        accept(sockfd, (struct sockaddr *)&cli_addr, (socklen_t *)&clilen);
+
+    if (newsockfd < 0) {
       close(sockfd);
-      throw runtime_error("Error on accept");
+      cerr << "Error on accept" << endl;
     } else {
-      thread t1(handle_connection, new_fd);
-      threads.push_back(move(t1));
+      // Create thread to serve the client
+      thread t1(handle_connection, newsockfd);
+      // t1.join();
+      // close(newsockfd);
+      current_threads.push_back(move(t1));
     }
   }
 }
 
-void handle_connection(int sockfd) {
+void handle_connection(int sock) {
   int n;
   char buffer[256];
 
-  string message = "Enter your player name: ";
-  if ((n = send(sockfd, message.c_str(), message.length(), 0)) < 0) {
-    close(sockfd);
+  memset(buffer, 0, 256 * sizeof(char));
+
+  if ((n = write(sock, "Enter your player name: ", 25)) < 0) {
+    close(sock);
     throw runtime_error("Unable to write to socket");
   }
-
-  memset(buffer, 0, MESSAGE_SIZE * sizeof(char));
-  if ((n = recv(sockfd, buffer, MESSAGE_SIZE, 0)) < 0) {
-    close(sockfd);
+  if ((n = read(sock, buffer, 255)) < 0) {
+    close(sock);
     throw runtime_error("Unable to read from socket");
   }
 
@@ -86,37 +85,31 @@ void handle_connection(int sockfd) {
       str = string(buffer);
       str.append(to_string(rand()));
     }
-    player_sockets.insert({str, sockfd});
+    player_sockets.insert({str, sock});
   } else {
-    player_sockets.insert({str, sockfd});
+    player_sockets.insert({str, sock});
   }
   player_socket_mutex.unlock();
 
   string player_name = str;
   memset(buffer, 0, MESSAGE_SIZE * sizeof(char));
   sprintf(buffer, "Player Name: %s", player_name.c_str());
-  message = "Player Name: " + player_name;
-  if ((n = send(sockfd, message.c_str(), message.length(), 0)) < 0) {
-    close(sockfd);
-    // Wait for access to the player list
-    player_socket_mutex.lock();
-    player_sockets.erase(player_name);
-    player_socket_mutex.unlock();
+  if ((n = write(sock, buffer, MESSAGE_SIZE)) < 0) {
+    close(sock);
     throw runtime_error("ERROR writing to socket");
   }
+
   print_players();
 
   while (1) {
   }
 
-  close(sockfd);
+  close(sock);
 }
 
 void print_players() {
-
-  cout << endl;
-  cout << "Players: " << endl;
   for (const auto &[k, v] : player_sockets) {
+    cout << endl;
     cout << "Player: " << k << ", Socket: " << to_string(v) << endl;
   }
 }
