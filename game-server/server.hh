@@ -11,25 +11,16 @@ using namespace std;
 #define QUEUE_SIZE 5
 #define MESSAGE_SIZE 255
 
-static vector<thread> threads; /**< Stores all threads created by the server */
+static vector<thread>
+    thread_list; /**< Stores all threads created by the server */
 static std::mutex thread_list_mutex;
 
-static map<std::string, int>
-    player_sockets; /**< Map from player names to sockets */
-static std::mutex player_socket_mutex;
+static map<int, std::string> socket_player;
+static std::mutex player_mutex;
 
-/**
-** @brief Handles Players Connecting to the Server
-**
-*/
-void handle_connection(int);
-
-void print_players();
-
-/**
-** @brief Launches the server
-**
-*/
-void run_server(int);
+void relay(std::string);     /**< Send the message to all clients connected*/
+void handle_connection(int); /**< Handles individual clients on a new thread*/
+string random_string(size_t length); /**< Creates random strings */
+void run_server(int);                /**< Lanuches the server */
 
 #endif // SERVER_H_

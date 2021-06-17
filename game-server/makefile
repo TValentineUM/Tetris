@@ -4,9 +4,9 @@
 # @file
 # @version 0.1
 
-CXX=g++
+CXX=clang++
 CXXFLAGS=-I -Wall -std=c++17 -g -pthread
-DEPS = server.hh
+DEPS = server.hh tprotocol.hh
 OBJ = server.cc
 MAINOBJ = main.o $(OBJ)
 
@@ -16,10 +16,7 @@ MAINOBJ = main.o $(OBJ)
 server: $(MAINOBJ)
 		$(CXX) -o $@ $^ $(CXXFLAGS)
 
-client:
-		$(CXX) -o $@ client.cc $(CXXFLAGS)
-
 clean:
-	rm -rf **/*.o
+	rm *.o
 
 # end

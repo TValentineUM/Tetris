@@ -1,14 +1,9 @@
 #include "server.hh"
-#include <exception>
-#include <iostream>
 using namespace std;
 
-int main(int argc, char *argv[]) {
-  if (argc < 2) {
-    throw invalid_argument("No port provided");
-  } else {
-    run_server(atoi(argv[1]));
-  }
+#define PORTNO 42069
 
+int main(int argc, char *argv[]) {
+  run_server(PORTNO);
   return 0;
 }
