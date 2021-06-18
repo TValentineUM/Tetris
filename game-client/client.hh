@@ -17,5 +17,6 @@ void display_chat(WINDOW *win);
 void send_chat(string);
 void buffer_message(string);
 void send_messages(int sockfd, WINDOW *win);
+tmessage parse_message(string);
 
 #endif // CLIENT_H_

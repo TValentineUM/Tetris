@@ -36,13 +36,78 @@ int main(int argc, char *argv[]) {
   wrefresh(chat_window);
   wrefresh(text_window);
 
-  thread t2(display_chat, chat_window);
-  thread t1(send_messages, sockfd, text_window);
-  thread t3(consume_chat, sockfd);
-  endwin();
+  struct pollfd pfds[2];
+  pfds[0].fd = 0; // STDIN
+  pfds[0].events = POLLIN;
 
-  t1.join();
-  t2.join();
-  t3.join();
-  return 0;
+  pfds[1].fd = sockfd;
+  pfds[1].events = POLLIN;
+
+  for (;;) {
+    move(yMax - 4, 1);
+    int poll_count = poll(pfds, 2, -1); // Wait till we have input
+
+    if (poll_count == -1) {
+      exit(1);
+    } else {
+      for (int i = 0; i < 2; i++) {
+        if (pfds[i].revents & POLLIN) {
+          if (pfds[i].fd == 0) {
+
+            // Standard Input is ready
+            char buffer[255];
+            memset(buffer, 0, 255 * sizeof(char));
+            getstr(buffer);
+            wclear(text_window);
+            box(text_window, 0, 0);
+            tmessage msg = parse_message(buffer);
+            if (send(sockfd, (char *)&msg, sizeof(tmessage), 0) < 0) {
+              perror("ERROR writing to socket");
+              close(sockfd);
+              endwin();
+              exit(1);
+            }
+            wrefresh(text_window);
+          } else if (pfds[i].fd == sockfd) {
+            char *buffer = (char *)malloc(sizeof(tmessage));
+            int numbytes = recv(sockfd, (char *)buffer, sizeof(tmessage), 0);
+            if (numbytes == 0) {
+              endwin();
+              cout << "Server Disconnected" << endl;
+              close(sockfd);
+              exit(0);
+            } else if (numbytes < 0) {
+              endwin();
+              perror("ERROR reading from socket");
+              close(sockfd);
+              exit(1);
+            }
+            tmessage *msg = (tmessage *)buffer;
+            switch (msg->message_type) {
+            case CHAT: {
+              chat_messages.push_back(string(msg->buffer));
+              wclear(chat_window);
+              box(chat_window, 0, 0);
+
+              if (chat_messages.size() > (yMax - 12)) {
+                chat_messages.erase(chat_messages.begin(),
+                                    chat_messages.begin() +
+                                        (chat_messages.size() - (yMax - 12)));
+              }
+              for (int i = 0; i < chat_messages.size(); i++) {
+                mvwprintw(chat_window, i + 1, 1, chat_messages[i].c_str());
+                wrefresh(chat_window);
+              }
+            }
+
+            default:
+              break;
+            }
+            free(buffer);
+            // Socket is ready for read;
+          }
+        }
+      }
+    }
+  }
 }
