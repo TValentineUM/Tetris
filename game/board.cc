@@ -22,7 +22,7 @@ bool Board::piece_fits(tetromino t) {
           return false;
         }
         auto y_position = y_offset + y;
-        if (y_position >= ROWS) {
+        if (y_position >= ROWS || y_position < 0) {
           return false;
         }
         if (playing_field[y_position][x_position]) {
@@ -38,7 +38,9 @@ void Board::insert_piece(tetromino t) {
   if (!piece_fits(t)) {
     erase();
     refresh();
-    mvprintw((LINES / 2) - (10 / 2), 0, GAMEOVER);
+    int xMax, yMax;
+    getmaxyx(stdscr, yMax, xMax);
+    mvprintw((yMax / 2) - 5, 20, GAMEOVER);
     refresh();
     this_thread::sleep_for(chrono::seconds(1));
     endwin();
@@ -60,7 +62,6 @@ void Board::insert_piece(tetromino t) {
 }
 
 void Board::clear_lines() {
-
   queue<int> lines;
   for (int y = 0; y < ROWS; y++) {
     int count = 0;

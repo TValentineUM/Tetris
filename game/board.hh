@@ -7,6 +7,7 @@
 #include "pieces.hh"
 #include <curses.h>
 #include <random>
+#include <tuple>
 #include <vector>
 using namespace std;
 

@@ -9,18 +9,13 @@
 #include <vector>
 using namespace std;
 
-#define ROTATE_KEY 'w'
-#define LEFT_KEY 'a'
-#define DOWN_KEY 's'
-#define RIGHT_KEY 'd'
-
 int main(int argc, char *argv[]) {
-
   initscr();
   curs_set(0);
   noecho();
   cbreak();
 
+  keypad(stdscr, TRUE);
   nodelay(stdscr, TRUE); // For getchr
 
   start_color();
@@ -58,9 +53,12 @@ int main(int argc, char *argv[]) {
       new_piece = game.get_next_piece();
       piece_flag = false;
     }
-    keypad(stdscr, TRUE);
     switch (getch()) {
-    case ROTATE_KEY: {
+    case 'w':
+    case 'W':
+    case 'k':
+    case 'K':
+    case KEY_UP: {
       auto old_rotation = new_piece.rotation;
       new_piece.rotation = (old_rotation + 1) % 4;
       if (!game.piece_fits(new_piece)) {
@@ -68,25 +66,37 @@ int main(int argc, char *argv[]) {
       }
       break;
     }
-    case LEFT_KEY: {
+    case 'a':
+    case 'A':
+    case 'h':
+    case 'H':
+    case KEY_LEFT: {
       new_piece.x -= 1;
       if (!game.piece_fits(new_piece)) {
         new_piece.x += 1;
       }
       break;
     }
-    case RIGHT_KEY: {
+    case 'd':
+    case 'D':
+    case 'l':
+    case 'L':
+    case KEY_RIGHT: {
       new_piece.x += 1;
       if (!game.piece_fits(new_piece)) {
         new_piece.x -= 1;
       }
       break;
     }
-    case DOWN_KEY: {
+    case 's':
+    case 'S':
+    case 'j':
+    case 'J':
+    case KEY_DOWN: {
       while (game.piece_fits(new_piece)) {
-        game.show_piece(new_piece);
+        // game.show_piece(new_piece);
         new_piece.y += 1;
-        this_thread::sleep_for(chrono::milliseconds(50));
+        // this_thread::sleep_for(chrono::milliseconds(50));
       }
       new_piece.y -= 1;
       game.insert_piece(new_piece);
@@ -99,10 +109,8 @@ int main(int argc, char *argv[]) {
     default:
       break;
     }
-    keypad(stdscr, FALSE);
-
     game.show_piece(new_piece);
-    if (counter < 8) {
+    if (counter < 12) {
       counter += 1;
       this_thread::sleep_for(chrono::milliseconds(25));
     } else {
@@ -121,6 +129,5 @@ int main(int argc, char *argv[]) {
   wrefresh(game_win);
 
   endwin();
-
   return 0;
 }
