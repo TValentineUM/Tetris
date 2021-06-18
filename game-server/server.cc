@@ -78,8 +78,11 @@ void handle_connection(int sock) {
           str.append(string(msg->buffer));
           relay(str);
           cout << str << endl;
-        } break;
+          break;
+        }
         default:
+          cout << "Another Message Type: " << msg->message_type << endl;
+          cout << msg->buffer << endl;
           break;
         }
       }

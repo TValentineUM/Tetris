@@ -3,8 +3,18 @@
 
 #define MESSAGE_LENGTH 256
 
+#define CMD_LEADERBOARD regex("!leaderboard")
+#define CMD_PLAYERS regex("!players")
+#define CMD_PLAYERSTATS regex("!playerstats")
+#define CMD_NICKNAME regex("!nickname")
+#define CMD_BATTLE regex("!battle")
+#define CMD_QUICK regex("!quick")
+#define CMD_CHILL regex("!chill")
+#define CMD_GO regex("!go")
+
 enum tmessage_t {
   CHAT,
+  NICKNAME,
   LEADERBOARD,
   PLAYER,
   PLAYERSTATS,
@@ -13,6 +23,7 @@ enum tmessage_t {
   CHILL,
   GO,
   SCORE_UPDATE,
+
 };
 
 struct tmessage {
