@@ -53,19 +53,21 @@ int main(int argc, char *argv[]) {
       for (int i = 0; i < 2; i++) {
         if (pfds[i].revents & POLLIN) {
           if (pfds[i].fd == 0) {
-
             // Standard Input is ready
-            char buffer[255];
-            memset(buffer, 0, 255 * sizeof(char));
+            char buffer[MESSAGE_LENGTH];
+            memset(buffer, 0, MESSAGE_LENGTH * sizeof(char));
             getstr(buffer);
             wclear(text_window);
             box(text_window, 0, 0);
-            tmessage msg = parse_message(buffer);
-            if (send(sockfd, (char *)&msg, sizeof(tmessage), 0) < 0) {
-              perror("ERROR writing to socket");
-              close(sockfd);
-              endwin();
-              exit(1);
+            // Checking theere is actual data to send
+            if (strlen(buffer)) {
+              tmessage msg = parse_message(buffer);
+              if (send(sockfd, (char *)&msg, sizeof(tmessage), 0) < 0) {
+                perror("ERROR writing to socket");
+                close(sockfd);
+                endwin();
+                exit(1);
+              }
             }
             wrefresh(text_window);
           } else if (pfds[i].fd == sockfd) {
@@ -104,7 +106,6 @@ int main(int argc, char *argv[]) {
               break;
             }
             free(buffer);
-            // Socket is ready for read;
           }
         }
       }

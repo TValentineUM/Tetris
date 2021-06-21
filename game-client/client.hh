@@ -23,7 +23,7 @@ using namespace std;
 #define CMD_QUICK_FULL regex("!quick [1-7]")
 #define CMD_CHILL regex("!chill")
 #define CMD_GO regex("!go")
-#define CMD_GO_FULL regex("!go [:d:]*")
+#define CMD_GO_FULL regex("!go \\d*")
 
 static vector<string> chat_messages;
 static mutex message_lock;

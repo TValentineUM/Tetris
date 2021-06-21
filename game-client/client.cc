@@ -53,7 +53,7 @@ tmessage parse_message(string str) {
   tmessage msg;
   // Determining if command
   if (str.at(0) == '!') {
-    stringstream ss(str);
+    istringstream ss(str);
     string command;
     ss >> command; // Getting the first word
     if (regex_match(command, CMD_LEADERBOARD)) {
@@ -107,10 +107,14 @@ tmessage parse_message(string str) {
           if (arg_count > 0) {
             throw invalid_argument(
                 "Rising Tide gamemode does not take arguments");
-          } else {
-            getline(ss, str); // Getting playernames
-            strcpy(msg.buffer, str.c_str());
           }
+          string temp;
+          string t1;
+          while (ss >> temp) {
+            t1.append(temp);
+            t1.append(" ");
+          }
+          strcpy(msg.buffer, t1.c_str());
         } break;
         case 1: {
           if (arg_count != 2) {
@@ -126,7 +130,6 @@ tmessage parse_message(string str) {
               msg.arg2 = htonl(stoi(value));
             } else {
               win = true;
-              ss >> msg.arg3;
               msg.arg3 = htonl(stoi(value));
             }
             ss >> temp;
@@ -137,13 +140,18 @@ tmessage parse_message(string str) {
               msg.arg2 = htonl(stoi(value));
             } else {
               win = true;
-              ss >> msg.arg3;
               msg.arg3 = htonl(stoi(value));
             }
             if (!(base && win)) {
               cout << msg.arg2 << "\t" << msg.arg3 << endl;
               throw invalid_argument("Fasttrack needs two arguments");
             }
+            string t1;
+            while (ss >> temp) {
+              t1.append(temp);
+              t1.append(" ");
+            }
+            strcpy(msg.buffer, t1.c_str());
           }
         } break;
         case 2: {
@@ -151,19 +159,33 @@ tmessage parse_message(string str) {
             throw invalid_argument("Boomer needs 1 settings");
           } else {
             string temp;
-            getline(ss, temp, '=');
-            ss >> msg.arg2;
-            msg.arg2 = htonl(msg.arg2);
+            ss >> temp;
+            string argument = temp.substr(0, temp.find("="));
+            string value = temp.substr(temp.find("=") + 1, temp.size());
+            if (argument != "time") {
+              throw invalid_argument(
+                  "Boomer Gamemode only Takes time as an argumetn");
+            } else {
+              msg.arg2 = htonl(stoi(value));
+            }
+            string t1;
+            while (ss >> temp) {
+              t1.append(temp);
+              t1.append(" ");
+            }
+            strcpy(msg.buffer, t1.c_str());
           }
         } break;
         default:
           throw logic_error("Invalid gamenumber entered");
         }
+        // strcpy(msg.buffer, temp.c_str());
       } else {
         throw invalid_argument("Unable to parse: \'" + str +
                                "\', the correct sytnax is \'!battle <gamemode> "
                                "<gameoptions> <players>{ 1, 7}\'");
       }
+
     } else if (regex_match(command, CMD_QUICK)) {
       msg.message_type = (tmessage_t)htonl((int32_t)QUICKPLAY);
       if (regex_match(str, CMD_QUICK_FULL)) {
