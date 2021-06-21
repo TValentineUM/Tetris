@@ -8,11 +8,13 @@
 #include <iterator>
 #include <netdb.h>
 #include <poll.h>
+#include <signal.h>
 #include <sstream>
 #include <string>
 #include <sys/epoll.h>
 #include <sys/socket.h>
 #include <unistd.h>
+
 using namespace std;
 
 void relay(std::string message) {
@@ -57,19 +59,26 @@ std::string random_string(size_t length) {
   return str;
 }
 
-void handle_connection(int sock) {
+void handle_connection(int sock_fd) {
 
   // Generating and Regestering Player
   string name = random_string(NAMESIZE);
   player_data info;
   strcpy(info.name, name.c_str());
+
+  struct sockaddr_in address;
+  socklen_t addrlen = sizeof(address);
+  if (getpeername(sock_fd, (struct sockaddr *)&address, &addrlen) < 0) {
+    perror("getpeername");
+  }
+  info.address = address;
+
   player_list_mutex.lock();
-  player_list.emplace(sock, info);
+  player_list.emplace(sock_fd, info);
   player_list_mutex.unlock();
 
-  int nfds, epollfd;
   struct pollfd pfds[1];   // More if you want to monitor more
-  pfds[0].fd = sock;       // Socket
+  pfds[0].fd = sock_fd;    // Socket
   pfds[0].events = POLLIN; // Tell me when ready to read
 
   for (;;) {
@@ -83,18 +92,29 @@ void handle_connection(int sock) {
       int nbytes = recv(pfds[0].fd, buffer, sizeof(tmessage), 0);
       if (nbytes < 0) {
         perror("ERROR reading from socket");
-        close(sock);
+        close(sock_fd);
         return;
       } else if (nbytes == 0) {
-        cout << "user on socket " << sock << " disconnected" << endl;
+        cout << "Client with IP: " << inet_ntoa(info.address.sin_addr) << ":"
+             << info.address.sin_port << " connected to socket " << sock_fd
+             << " disconnected" << endl;
+        player_data player;
         player_list_mutex.lock();
-        player_list.erase(sock);
+        player = player_list.at(sock_fd); // Getting this player
+        player_list.erase(sock_fd);
         player_list_mutex.unlock();
-        close(sock);
+        game_list_mutex.lock();
+        for (auto i : player.games) {
+          auto entry = game_list.find(i);
+          if (entry != game_list.end()) {
+            entry->second.players.erase(sock_fd);
+          }
+        }
+        game_list_mutex.unlock();
         return;
       } else {
         tmessage *msg = decode_message(buffer);
-        handle_message(msg, sock);
+        handle_message(msg, sock_fd);
       }
       free(buffer);
     }
@@ -110,8 +130,14 @@ tmessage *decode_message(char *buffer) {
   return msg;
 }
 
-void handle_message(tmessage *msg, int sock) {
+void encode_message(tmessage *msg) {
+  msg->message_type = (tmessage_t)htonl((int32_t)msg->message_type);
+  msg->arg1 = htonl(msg->arg1);
+  msg->arg2 = htonl(msg->arg2);
+  msg->arg3 = htonl(msg->arg3);
+}
 
+void handle_message(tmessage *msg, int sock) {
   switch (msg->message_type) {
   case CHAT: {
     string str;
@@ -149,9 +175,87 @@ void handle_message(tmessage *msg, int sock) {
     break;
   }
   case LEADERBOARD: {
-    cout << "ARG1 is " << (msg->arg1) << endl;
     auto scores = get_leaderboard(msg->arg1);
     send_multiple(sock, scores);
+    break;
+  }
+  case BATTLE: {
+    game new_game;
+    new_game.gamemode = msg->arg1; // Setting the gamemode
+    new_game.arg1 = msg->arg1;
+    new_game.arg2 = msg->arg2;
+    cout << "Names: " << msg->buffer << endl;
+    vector<string> players;
+    string temp;
+    stringstream ss(msg->buffer);
+    while (ss >> temp) {
+      players.push_back(temp);
+    }
+    auto player_sockets = get_socket_from_playername(players);
+    player_sockets.push_back(sock);
+    for (auto c : player_sockets) {
+      // Will insert true for the initiator, false for everyone else
+      new_game.players.insert({c, (c == sock)});
+    }
+
+    // Creating Game
+    game_list_mutex.lock();
+    int game_number = ++game_counter;
+    game_list.emplace(game_number, new_game);
+    game_list_mutex.unlock();
+
+    // Assigning Game To each participant
+    player_list_mutex.lock();
+    for (auto i : player_sockets) {
+      auto entry = player_list.find(i);
+      if (entry != player_list.end()) {
+        entry->second.games.push_back(game_number);
+      }
+    }
+    player_list_mutex.unlock();
+
+    thread t1(handle_game, game_number);
+    string playername = player_list.at(sock).name;
+
+    for (auto c : player_sockets) {
+      if (c != sock) {
+        send_chat(
+            c, "## " + playername + " has challenged you to a " +
+                   [](int x) {
+                     switch (x) {
+                     case RISING_TIDE:
+                       return "Rising Tide";
+                     case FAST_TRACK:
+                       return "Fast Track";
+                     case BOOMER:
+                       return "Boomer";
+                     default:
+                       return "";
+                     }
+                   }(msg->arg1) +
+                   " battle (id = " + to_string(game_number) + ")");
+      } else {
+        send_chat(c, "Game Created with id=" + to_string(game_number));
+      }
+    }
+    t1.detach();
+    break;
+  }
+  case GO: {
+    game_list_mutex.lock();
+    auto g = game_list.find(msg->arg1);
+    if (g != game_list.end()) {
+      auto entry =
+          g->second.players.find(sock); // Checking if we are part of the game
+      if (entry != g->second.players.end()) {
+        entry->second = true;
+      } else {
+        send_chat(sock, "You were not invited to the game in question");
+      }
+      game_list_mutex.unlock();
+    } else {
+      send_chat(sock, "The game you requested to join does not exist!");
+    }
     break;
   }
   default:
@@ -183,6 +287,8 @@ vector<string> get_leaderboard(int game) {
       return get<0>(p1.fasttrack_games) > get<0>(p2.fasttrack_games);
     case CHILLER:
       return p1.chill > p2.chill;
+    default:
+      throw logic_error("Invalid Gamemode");
     }
   };
 
@@ -200,27 +306,28 @@ vector<string> get_leaderboard(int game) {
 
   scores.push_back(formatted_out("Player", "Score", "Win", "Loss"));
 
+  auto scores_out = [formatted_out, &scores](string name, int score,
+                                             tuple<int, int> stats) {
+    scores.push_back(formatted_out(name, to_string(score),
+                                   to_string(get<0>(stats)),
+                                   to_string(get<1>(stats))));
+  };
+
   for (auto iter = plist.begin();
        iter != plist.end() || iter < plist.begin() + 2; iter++) {
     switch (game) {
     case RISING_TIDE:
-      scores.push_back(formatted_out(iter->name, to_string(iter->rising),
-                                     to_string(get<0>(iter->rising_games)),
-                                     to_string(get<1>(iter->rising_games))));
+      scores_out(iter->name, iter->rising, iter->rising_games);
       break;
     case BOOMER:
-      scores.push_back(formatted_out(iter->name, to_string(iter->boomer),
-                                     to_string(get<0>(iter->boomer_games)),
-                                     to_string(get<1>(iter->boomer_games))));
+      scores_out(iter->name, iter->boomer, iter->boomer_games);
       break;
     case FAST_TRACK:
-      scores.push_back(formatted_out(iter->name, to_string(iter->fasttrack),
-                                     to_string(get<0>(iter->fasttrack_games)),
-                                     to_string(get<1>(iter->fasttrack_games))));
+      scores_out(iter->name, iter->fasttrack, iter->fasttrack_games);
       break;
     case CHILLER:
       scores.push_back(
-          formatted_out(iter->name, to_string(iter->rising), "N/A", "N/A"));
+          formatted_out(iter->name, to_string(iter->chill), "N/A", "N/A"));
       break;
     }
   }
@@ -273,23 +380,48 @@ void run_server(int portno) {
       close(newsockfd);
       cerr << "Error on accept" << endl;
     } else {
-      struct sockaddr_in new_connection;
-      socklen_t addrlen = sizeof(new_connection);
-      if (getsockname(newsockfd, (struct sockaddr *)&new_connection, &addrlen) <
-          0) {
-        perror("getsockname");
-      } else {
-        struct sockaddr_in addr_in;
-        socklen_t addrlen = sizeof(addr_in);
-        if (getpeername(newsockfd, (struct sockaddr *)&addr_in, &addrlen) < 0) {
-          perror("getpeername");
-        }
-        cout << "New Client with IP: " << inet_ntoa(addr_in.sin_addr)
-             << " On port: " << new_connection.sin_port
-             << " with socket number " << newsockfd << endl;
+      struct sockaddr_in addr_in;
+      socklen_t addrlen = sizeof(addr_in);
+      if (getpeername(newsockfd, (struct sockaddr *)&addr_in, &addrlen) < 0) {
+        perror("getpeername");
       }
+      cout << "New Client with IP: " << inet_ntoa(addr_in.sin_addr)
+           << " On port: " << addr_in.sin_port << " with socket number "
+           << newsockfd << endl;
       thread t1(handle_connection, newsockfd);
       current_threads.push_back(move(t1));
+    }
+  }
+}
+
+vector<int> get_socket_from_playername(vector<string> players) {
+
+  player_list_mutex.lock();
+  auto local_copy = player_list; // taking a snapshot of the player list
+  player_list_mutex.unlock();
+  vector<int> sockets;
+
+  // Worst case 8 * length of player list
+  for (auto &[k, v] : local_copy) {
+    if (find(players.begin(), players.end(), string(v.name)) != players.end()) {
+      sockets.push_back(k);
+    }
+  }
+  return sockets;
+}
+
+void handle_game(int game_id) {
+  // Start a 30 second timeout
+  this_thread::sleep_for(chrono::seconds(LOBBY_TIME));
+  // Timeout ended
+  game_list_mutex.lock(); // locking the game_list so no one can edit
+  auto match = game_list.at(game_id);
+  game_list.erase(game_id);
+  game_list_mutex.unlock();
+
+  for (auto &[k, v] : match.players) {
+    if (v) {
+      send_chat(k, "Your game has started nigga");
     }
   }
 }
