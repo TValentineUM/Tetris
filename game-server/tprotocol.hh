@@ -1,22 +1,19 @@
 #ifndef TPROTOCOL_H_
 #define TPROTOCOL_H_
 
-#define MESSAGE_LENGTH 256
+#include <string>
 
-#define CMD_LEADERBOARD regex("!leaderboard")
-#define CMD_PLAYERS regex("!players")
-#define CMD_PLAYERSTATS regex("!playerstats")
-#define CMD_NICKNAME regex("!nickname")
-#define CMD_BATTLE regex("!battle")
-#define CMD_QUICK regex("!quick")
-#define CMD_CHILL regex("!chill")
-#define CMD_GO regex("!go")
+#define MESSAGE_LENGTH 512
+#define RISING_TIDE 0
+#define FAST_TRACK 1
+#define BOOMER 2
+#define CHILLER 3
 
-enum tmessage_t {
+enum tmessage_t : int32_t {
   CHAT,
   NICKNAME,
   LEADERBOARD,
-  PLAYER,
+  PLAYERS,
   PLAYERSTATS,
   BATTLE,
   QUICKPLAY,
@@ -26,8 +23,17 @@ enum tmessage_t {
 
 };
 
+/**
+ * @brief Global Structure to be used for all communications
+ *
+ * Basically since I only really wanna deal with 1 structure, its gonna be used
+ * by every command. How individual commands use the args will be well defined
+ * so that we can save server time by cosntructing the proper commands clients
+ * side.
+ */
 struct tmessage {
   tmessage_t message_type;
+  int32_t arg1, arg2, arg3;
   char buffer[MESSAGE_LENGTH];
 
 } typedef tmessage;
