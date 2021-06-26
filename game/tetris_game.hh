@@ -14,7 +14,7 @@ using namespace std;
 
 class TetrisGame {
 
-private:
+protected:
   WINDOW *game_window;
   WINDOW *score_window;
   WINDOW *piece_window;
@@ -24,8 +24,12 @@ private:
   vector<vector<char>> playing_field;
   mt19937 rng;
   uniform_int_distribution<> distrib;
+  vector<pair<string, string>> ips;
+  void game_setup();
+  int do_gametick(tetromino &, bool &, int &);
 
 public:
+  TetrisGame(int, vector<pair<string, string>>, int, int);
   TetrisGame(WINDOW *game_window, WINDOW *score_window, WINDOW *piece_window,
              WINDOW *players_window, int seed)
       : playing_field{vector<vector<char>>(ROWS, vector<char>(COLUMNS, 0))},
@@ -37,7 +41,7 @@ public:
 
   gamestate state;
   bool piece_fits(tetromino);
-  void insert_piece(tetromino);
+  int insert_piece(tetromino);
   tetromino get_next_piece();
   void clear_lines();
   void display_board();

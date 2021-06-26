@@ -1,12 +1,24 @@
 #include "ascii_art.hh"
 #include "tetris_game.hh"
+#include <chrono>
 #include <cstdlib>
 #include <cstring>
+#include <iostream>
 #include <queue>
 #include <stdexcept>
 #include <thread>
 #include <vector>
 using namespace std;
+
+TetrisGame::TetrisGame(int seed, vector<pair<string, string>> ips,
+                       int player_no, int game_no)
+    : playing_field{vector<vector<char>>(ROWS, vector<char>(COLUMNS, 0))},
+      next_piece{tetrominos[seed % 7]}, distrib{uniform_int_distribution<>(0,
+                                                                           6)},
+      rng{mt19937(seed)}, score{0}, lines_cleared{0}, ips{ips}, seed{seed} {
+  state.player_no = player_no;
+  state.game_no = game_no;
+}
 
 bool TetrisGame::piece_fits(tetromino t) {
   auto x_offset = t.x;
@@ -34,17 +46,9 @@ bool TetrisGame::piece_fits(tetromino t) {
   return true;
 }
 
-void TetrisGame::insert_piece(tetromino t) {
+int TetrisGame::insert_piece(tetromino t) {
   if (!piece_fits(t)) {
-    erase();
-    refresh();
-    int xMax, yMax;
-    getmaxyx(stdscr, yMax, xMax);
-    mvprintw((yMax / 2) - 5, 20, GAMEOVER);
-    refresh();
-    this_thread::sleep_for(chrono::seconds(1));
-    endwin();
-    exit(0);
+    return -1;
   }
 
   auto x_offset = t.x;
@@ -59,6 +63,7 @@ void TetrisGame::insert_piece(tetromino t) {
       }
     }
   }
+  return 0;
 }
 
 void TetrisGame::clear_lines() {
@@ -182,4 +187,136 @@ void TetrisGame::display_players() {
   wrefresh(players_window);
 }
 
-void TetrisGame::run() {}
+void TetrisGame::game_setup() {
+  initscr();
+  curs_set(0);
+  noecho();
+  cbreak();
+
+  keypad(stdscr, TRUE);
+  nodelay(stdscr, TRUE); // For getchr
+
+  start_color();
+  init_pair(1, COLOR_WHITE, COLOR_BLUE);
+  init_pair(2, COLOR_WHITE, COLOR_RED);
+  init_pair(3, COLOR_WHITE, COLOR_GREEN);
+  init_pair(4, COLOR_BLACK, COLOR_YELLOW);
+  init_pair(5, COLOR_BLACK, COLOR_MAGENTA);
+  init_pair(6, COLOR_BLACK, COLOR_CYAN);
+  init_pair(7, COLOR_BLACK, COLOR_WHITE);
+
+  game_window = newwin(ROWS + 2, (2 * COLUMNS) + 2, 3, 3);
+  piece_window = newwin(7, 12, 3, 27);
+  score_window = newwin(8, 17, 13, 27);
+  players_window = newwin(ROWS + 2, COLUMNS + (COLUMNS / 2), 3, 47);
+
+  box(game_window, 0, 0);
+  box(score_window, 0, 0);
+  box(piece_window, 0, 0);
+  box(players_window, 0, 0);
+
+  refresh();
+
+  display_board();
+  display_score();
+  display_players();
+  wrefresh(game_window);
+}
+
+int TetrisGame::do_gametick(tetromino &new_piece, bool &piece_flag,
+                            int &counter) {
+  display_players();
+  if (piece_flag) {
+    new_piece = get_next_piece();
+    piece_flag = false;
+  }
+  switch (getch()) {
+  case 'w':
+  case 'W':
+  case 'k':
+  case 'K':
+  case KEY_UP: {
+    auto old_rotation = new_piece.rotation;
+    new_piece.rotation = (old_rotation + 1) % 4;
+    if (!piece_fits(new_piece)) {
+      new_piece.rotation = old_rotation;
+    }
+    break;
+  }
+  case 'a':
+  case 'A':
+  case 'h':
+  case 'H':
+  case KEY_LEFT: {
+    new_piece.x -= 1;
+    if (!piece_fits(new_piece)) {
+      new_piece.x += 1;
+    }
+    break;
+  }
+  case 'd':
+  case 'D':
+  case 'l':
+  case 'L':
+  case KEY_RIGHT: {
+    new_piece.x += 1;
+    if (!piece_fits(new_piece)) {
+      new_piece.x -= 1;
+    }
+    break;
+  }
+  case 's':
+  case 'S':
+  case 'j':
+  case 'J':
+  case KEY_DOWN: {
+    while (piece_fits(new_piece)) {
+      new_piece.y += 1;
+    }
+    new_piece.y -= 1;
+    if (insert_piece(new_piece) != 0) {
+      return -1;
+    };
+    clear_lines();
+    display_board();
+    piece_flag = true;
+    return 0;
+    break;
+  }
+  default:
+    break;
+  }
+  show_piece(new_piece);
+  if (counter < 12) {
+    counter += 1;
+    this_thread::sleep_for(chrono::milliseconds(25));
+  } else {
+    counter = 0;
+    new_piece.y += 1;
+    if (!piece_fits(new_piece)) {
+      new_piece.y -= 1;
+      if (insert_piece(new_piece) != 0) {
+        return -1;
+      };
+      clear_lines();
+      display_board();
+      piece_flag = true;
+    }
+  }
+  return 0;
+}
+
+void TetrisGame::run() {
+
+  game_setup();
+
+  thread t1(communicate_state, 0, std::ref(state), ips);
+  bool piece_flag = true;
+  int counter = 0;
+  tetromino new_piece;
+  while (do_gametick(new_piece, piece_flag, counter) == 0) {
+  }
+  clear();
+  endwin();
+  cout << "game ended" << endl;
+}

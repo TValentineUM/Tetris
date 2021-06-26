@@ -7,8 +7,8 @@
 
 CXX=clang++
 CXXFLAGS=-I -Wall -std=c++17 -g -lpthread
-DEPS = tetris_game.hh pieces.hh ../client-client/client.hh
-OBJ = tetris_game.o ../client-client/client.o
+DEPS = tetris_game.hh pieces.hh boomer.hh ../client-client/client.hh
+OBJ = tetris_game.o ../client-client/client.o boomer.o
 MAINOBJ = main.o $(OBJ)
 
 %.o: %.cc $(DEPS)
