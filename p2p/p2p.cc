@@ -1,4 +1,4 @@
-//#include "../game-server/tprotocol.hh"
+#include "../server/tprotocol.hh"
 #include "p2p.hh"
 #include <arpa/inet.h>
 #include <cstring>
@@ -10,6 +10,7 @@
 #include <sys/types.h>
 #include <thread>
 #include <unistd.h>
+using namespace std;
 
 vector<pair<string, string>> decode_hostnames(string str) {
   stringstream ss(str);
@@ -140,19 +141,15 @@ void broadcast_state(int sock_fd, gamestate &state,
         return;
       }
     }
-    // if (counter == 0) {
-
-    //   // tmessage server_msg;
-    //   // server_msg.message_type = SCORE_UPDATE;
-    //   // write(sock_fd, const void *__buf, size_t __n)
-    //   stringstream ss;
-    //   ss << to_string(state.player_no) << "," << to_string(state.local.score)
-    //      << "," << to_string(state.local.lines) << endl;
-    //   string message = ss.str();
-    //   lockf(sock_fd, F_LOCK, 0);
-    //   write(sock_fd, message.c_str(), message.size() * sizeof(char));
-    //   lockf(sock_fd, F_ULOCK, 0);
-    // }
+    if (counter == 0) {
+      tmessage server_msg;
+      server_msg.message_type = (tmessage_t)htonl((int32_t)SCORE_UPDATE);
+      server_msg.arg1 = 0;
+      server_msg.arg2 = htonl(state.player_no);
+      server_msg.arg3 = htonl(state.local.score);
+      server_msg.arg4 = htonl(state.local.lines);
+      send(sock_fd, (char *)&server_msg, sizeof(server_msg), 0);
+    }
 
     this_thread::sleep_for(
         TICKDURATION); // 20 updates per second - inline with titanfall

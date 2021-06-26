@@ -7,13 +7,13 @@
 class BoomerGame : public TetrisGame {
 
 private:
-  chrono::seconds game_duration;
+  std::chrono::seconds game_duration;
 
 public:
-  BoomerGame(int seed, vector<pair<string, string>> ips, int player_no,
-             int game_no, int game_duration)
-      : TetrisGame(seed, ips, player_no, game_no),
-        game_duration{chrono::seconds(game_duration)} {}
+  BoomerGame(int seed, std::vector<std::pair<std::string, std::string>> ips,
+             int player_no, int game_no, int server_socket, int game_duration)
+      : TetrisGame(seed, ips, player_no, game_no, server_socket),
+        game_duration{std::chrono::seconds(game_duration)} {}
 
   void run();
 };

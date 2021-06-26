@@ -10,11 +10,11 @@
 using namespace std;
 
 TetrisGame::TetrisGame(int seed, vector<pair<string, string>> ips,
-                       int player_no, int game_no)
+                       int player_no, int game_no, int server_socket)
     : playing_field{vector<vector<char>>(ROWS, vector<char>(COLUMNS, 0))},
-      next_piece{tetrominos[seed % 7]}, distrib{uniform_int_distribution<>(0,
-                                                                           6)},
-      rng{mt19937(seed)}, score{0}, lines_cleared{0}, ips{ips}, seed{seed} {
+      next_piece{tetrominos[seed % 7]},
+      distrib{uniform_int_distribution<>(0, 6)}, rng{mt19937(seed)}, score{0},
+      lines_cleared{0}, ips{ips}, seed{seed}, server_socket{server_socket} {
   state.player_no = player_no;
   state.game_no = game_no;
 }
@@ -306,7 +306,8 @@ void TetrisGame::run() {
 
   game_setup();
   bool game_ended = false;
-  thread t1(communicate_state, 0, std::ref(state), ips, std::ref(game_ended));
+  thread t1(communicate_state, server_socket, std::ref(state), ips,
+            std::ref(game_ended));
   bool piece_flag = true;
   int counter = 0;
   tetromino new_piece;

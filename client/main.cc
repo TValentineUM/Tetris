@@ -1,4 +1,8 @@
 #include "../client-server/client-server.hh"
+#include "../p2p/p2p.hh"
+#include "../tetris/boomer.hh"
+#include "../tetris/tetris_game.hh"
+
 #include <cstdlib>
 #include <cstring>
 #include <curses.h>
@@ -11,7 +15,6 @@
 #include <thread>
 #include <unistd.h> // Linux fds
 using namespace std;
-
 int main(int argc, char *argv[]) {
 
   char *hostname = argv[1];
@@ -100,6 +103,14 @@ int main(int argc, char *argv[]) {
                 mvwprintw(chat_window, i + 1, 1, chat_messages[i].c_str());
                 wrefresh(chat_window);
               }
+              break;
+            }
+            case INIT_GAME: {
+              erase();
+              auto ips = decode_hostnames(string(msg->buffer));
+              BoomerGame game(time(NULL), ips, msg->arg1, 0, sockfd, 35);
+              game.run();
+              break;
             }
 
             default:

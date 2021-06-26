@@ -1,5 +1,5 @@
-#ifndef CLIENT_H_
-#define CLIENT_H_
+#ifndef CLIENT_SERVER_H_
+#define CLIENT_SERVER_H_
 
 #include "../server/tprotocol.hh"
 #include <curses.h>

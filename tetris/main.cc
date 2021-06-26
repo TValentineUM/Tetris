@@ -33,26 +33,26 @@ int main(int argc, char *argv[]) {
 
   switch (atoi(argv[2])) {
   case 0: {
-    TetrisGame game(time(NULL), ips, player_no, game_id);
+    TetrisGame game(time(NULL), ips, player_no, game_id, 0);
     game.run();
   } break;
   case 1: {
     cout << "Starting a Boomer Game with 30 second timeout" << endl;
     this_thread::sleep_for(chrono::seconds(2));
-    BoomerGame game(time(NULL), ips, player_no, game_id, 45);
+    BoomerGame game(time(NULL), ips, player_no, game_id, 45, 0);
     game.run();
   } break;
   case 2: {
     cout << "Starting a FastTrack Game with 6 baselines and 2 winlines" << endl;
     this_thread::sleep_for(chrono::seconds(2));
-    FastTrack game(time(NULL), ips, player_no, game_id, 6, 2);
+    FastTrack game(time(NULL), ips, player_no, game_id, 6, 2, 0);
     game.run();
 
   } break;
   default: {
     cout << "Starting a Rising Tide Game" << endl;
     this_thread::sleep_for(chrono::seconds(2));
-    RisingTide game(time(NULL), ips, player_no, game_id);
+    RisingTide game(time(NULL), ips, player_no, game_id, 0);
     game.run();
   }
   }

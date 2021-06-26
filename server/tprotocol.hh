@@ -20,7 +20,7 @@ enum tmessage_t : int32_t {
   CHILL,
   GO,
   SCORE_UPDATE,
-
+  INIT_GAME,
 };
 
 /**

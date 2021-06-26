@@ -11,9 +11,9 @@ class RisingTide : public TetrisGame {
   int insert_lines();
 
 public:
-  RisingTide(int seed, vector<pair<string, string>> ips, int player_no,
-             int game_no)
-      : TetrisGame(seed, ips, player_no, game_no) {}
+  RisingTide(int seed, std::vector<std::pair<std::string, std::string>> ips,
+             int player_no, int game_no, int server_socket)
+      : TetrisGame(seed, ips, player_no, game_no, server_socket) {}
 
   void run();
 };

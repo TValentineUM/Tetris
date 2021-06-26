@@ -127,6 +127,7 @@ tmessage *decode_message(char *buffer) {
   msg->arg1 = ntohl(msg->arg1);
   msg->arg2 = ntohl(msg->arg2);
   msg->arg3 = ntohl(msg->arg3);
+  msg->arg4 = ntohl(msg->arg4);
   return msg;
 }
 
@@ -256,6 +257,17 @@ void handle_message(tmessage *msg, int sock) {
     } else {
       send_chat(sock, "The game you requested to join does not exist!");
     }
+    break;
+  }
+  case SCORE_UPDATE: {
+    int game_number = msg->arg1;
+    int player_number = msg->arg2;
+    int score = msg->arg3;
+    int lines = msg->arg4;
+    cout_mutex.lock();
+    cout << "Game: " << game_number << "\tPlayer: " << player_number
+         << "\tScore: " << score << "\tLines: " << lines << endl;
+    cout_mutex.unlock();
     break;
   }
   default:
@@ -419,16 +431,34 @@ void handle_game(int game_id) {
   game_list.erase(game_id);
   game_list_mutex.unlock();
 
+  int local_counter = 0;
+
+  auto port_assigner = [&local_counter]() {
+    return ":" + to_string(DEFAULT_PORT + local_counter++);
+  };
+
+  vector<tuple<int, string>> ips;
   for (auto &[k, v] : match.players) {
     if (v) {
-      // auto player = player_list.find(k);
-      // if (player != player_list.end()) {
-      //   if (player->second.address.sin_addr == "127.0.0.1") {
-      //   }
-      //   if (player->address.)
-      // }
-      // if (player_list.at(k).)
-      send_chat(k, "Your game has started nigga");
+      auto player = player_list.find(k);
+      string ip = inet_ntoa(player->second.address.sin_addr) + port_assigner();
+      ips.push_back({k, ip});
     }
+  }
+  tmessage msg;
+  msg.message_type = INIT_GAME;
+
+  int player_no;
+  for (auto ip : ips) {
+    string temp;
+    for (auto peer : ips) {
+      if (peer != ip) {
+        temp += get<1>(peer) + " ";
+      }
+    }
+    msg.arg1 = player_no++;
+    temp += get<1>(ip);
+    strcpy(msg.buffer, temp.c_str());
+    send(get<0>(ip), (char *)&msg, sizeof(tmessage), 0);
   }
 }

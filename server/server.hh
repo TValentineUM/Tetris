@@ -22,14 +22,7 @@ using namespace std;
   16777343 // Integer representation of localhost ip
            //
 // Ports to be used when connected to localhost
-#define PLAYER_1_PORT "42001"
-#define PLAYER_2_PORT "42002"
-#define PLAYER_3_PORT "42003"
-#define PLAYER_4_PORT "42004"
-#define PLAYER_5_PORT "42005"
-#define PLAYER_6_PORT "42006"
-#define PLAYER_7_PORT "42007"
-#define PLAYER_8_PORT "42008"
+#define DEFAULT_PORT 42001
 
 struct player_data {
   char name[NAMESIZE];
@@ -51,6 +44,8 @@ struct game {
   map<int, bool> players; /**< List of participating socket ids, can be decodede
                              from player_list*/
 };
+
+static std::mutex cout_mutex;
 
 static vector<thread>
     thread_list; /**< Stores all threads created by the server */
