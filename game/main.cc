@@ -1,5 +1,5 @@
-#include "board.hh"
 #include "pieces.hh"
+#include "tetris_game.hh"
 #include <chrono>
 #include <iostream>
 #include <ncurses.h>
@@ -33,22 +33,43 @@ int main(int argc, char *argv[]) {
   WINDOW *game_win = newwin(ROWS + 2, (2 * COLUMNS) + 2, 3, 3);
   WINDOW *piece_win = newwin(7, 12, 3, 27);
   WINDOW *score_win = newwin(8, 17, 13, 27);
+  WINDOW *player_win = newwin(ROWS + 2, COLUMNS + (COLUMNS / 2), 3, 47);
 
   refresh();
 
   box(game_win, 0, 0);
   box(score_win, 0, 0);
   box(piece_win, 0, 0);
+  box(player_win, 0, 0);
 
-  Board game(game_win, score_win, piece_win, time(NULL));
+  TetrisGame game(game_win, score_win, piece_win, player_win, time(NULL));
   game.display_board();
   game.display_score();
   wrefresh(game_win);
+
+  vector<pair<string, string>> ips;
+
+  switch (atoi(argv[1])) {
+  case 0: {
+    ips.push_back({"127.0.0.1", "42069"});
+    ips.push_back({"127.0.0.1", "42070"});
+    game.state.player_no = 0;
+
+  } break;
+  case 1: {
+    ips.push_back({"127.0.0.1", "42070"});
+    ips.push_back({"127.0.0.1", "42069"});
+    game.state.player_no = 1;
+  } break;
+  }
+
+  thread t1(communicate_state, 0, std::ref(game.state), ips);
 
   bool piece_flag = true;
   int counter = 0;
   tetromino new_piece;
   while (1) {
+    game.display_players();
     if (piece_flag) {
       new_piece = game.get_next_piece();
       piece_flag = false;

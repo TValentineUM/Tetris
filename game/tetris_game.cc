@@ -1,5 +1,5 @@
 #include "ascii_art.hh"
-#include "board.hh"
+#include "tetris_game.hh"
 #include <cstdlib>
 #include <cstring>
 #include <queue>
@@ -8,7 +8,7 @@
 #include <vector>
 using namespace std;
 
-bool Board::piece_fits(tetromino t) {
+bool TetrisGame::piece_fits(tetromino t) {
   auto x_offset = t.x;
   auto y_offset = t.y;
 
@@ -34,7 +34,7 @@ bool Board::piece_fits(tetromino t) {
   return true;
 }
 
-void Board::insert_piece(tetromino t) {
+void TetrisGame::insert_piece(tetromino t) {
   if (!piece_fits(t)) {
     erase();
     refresh();
@@ -61,7 +61,7 @@ void Board::insert_piece(tetromino t) {
   }
 }
 
-void Board::clear_lines() {
+void TetrisGame::clear_lines() {
   queue<int> lines;
   for (int y = 0; y < ROWS; y++) {
     int count = 0;
@@ -71,19 +71,24 @@ void Board::clear_lines() {
     if (count == COLUMNS) {
       lines.push(y);
       lines_cleared += 1;
+      state.local.lines += 1;
     }
   }
   switch (lines.size()) {
   case 1:
+    state.local.score += 40;
     score += 40;
     break;
   case 2:
+    state.local.score += 100;
     score += 100;
     break;
   case 3:
+    state.local.score += 300;
     score += 300;
     break;
   case 4:
+    state.local.score += 1200;
     score += 1200;
     break;
   default:
@@ -101,7 +106,7 @@ void Board::clear_lines() {
   display_score();
 }
 
-void Board::display_board() {
+void TetrisGame::display_board() {
   for (int y = 0; y < ROWS; y++) {
     for (int x = 0; x < COLUMNS; x++) {
       switch (playing_field[y][x]) {
@@ -125,13 +130,13 @@ void Board::display_board() {
   wrefresh(game_window);
 }
 
-void Board::show_piece(tetromino t) {
-  Board temp_game = *this;
+void TetrisGame::show_piece(tetromino t) {
+  TetrisGame temp_game = *this;
   temp_game.insert_piece(t);
   temp_game.display_board();
 }
 
-tetromino Board::get_next_piece() {
+tetromino TetrisGame::get_next_piece() {
   tetromino temp = next_piece;
   next_piece = tetrominos[distrib(rng)];
   display_next_piece();
@@ -139,7 +144,7 @@ tetromino Board::get_next_piece() {
   return temp;
 }
 
-void Board::display_next_piece() {
+void TetrisGame::display_next_piece() {
   for (int y = 0; y < 5; y++) {
     for (int x = 0; x < 5; x++) {
       switch (next_piece.rotations[next_piece.rotation][y][x]) {
@@ -157,10 +162,24 @@ void Board::display_next_piece() {
   wrefresh(piece_window);
 }
 
-void Board::display_score() {
+void TetrisGame::display_score() {
   mvwprintw(score_window, 1, 1, "Score: ");
   mvwprintw(score_window, 2, 1, to_string(score).c_str());
   mvwprintw(score_window, 4, 1, "Lines Cleared:");
   mvwprintw(score_window, 5, 1, to_string(lines_cleared).c_str());
   wrefresh(score_window);
 }
+
+void TetrisGame::display_players() {
+  int counter = 1;
+  for (auto &[k, v] : state.players) {
+    string str = "Player: " + to_string(k);
+    mvwprintw(players_window, counter++, 1, str.c_str());
+    str = "Score: " + to_string(v.score);
+    mvwprintw(players_window, counter++, 1, str.c_str());
+    counter++;
+  }
+  wrefresh(players_window);
+}
+
+void TetrisGame::run() {}
