@@ -3,6 +3,7 @@
 
 #define ROWS 20
 #define COLUMNS 10
+#define STATIC_ROW 8
 
 #include "../client-client/client.hh"
 #include "pieces.hh"
@@ -28,6 +29,17 @@ protected:
   void game_setup();
   int do_gametick(tetromino &, bool &, int &);
 
+  gamestate state;
+  bool piece_fits(tetromino);
+  int insert_piece(tetromino);
+  tetromino get_next_piece();
+  void clear_lines();
+  void display_board();
+  void display_score();
+  void display_next_piece();
+  void display_players();
+  void show_piece(tetromino);
+
 public:
   TetrisGame(int, vector<pair<string, string>>, int, int);
   TetrisGame(WINDOW *game_window, WINDOW *score_window, WINDOW *piece_window,
@@ -39,16 +51,6 @@ public:
                                               0, 6)},
         rng{mt19937(seed)}, score{0}, lines_cleared{0} {}
 
-  gamestate state;
-  bool piece_fits(tetromino);
-  int insert_piece(tetromino);
-  tetromino get_next_piece();
-  void clear_lines();
-  void display_board();
-  void display_score();
-  void display_next_piece();
-  void display_players();
-  void show_piece(tetromino);
   void run();
 };
 

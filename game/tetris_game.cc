@@ -71,7 +71,7 @@ void TetrisGame::clear_lines() {
   for (int y = 0; y < ROWS; y++) {
     int count = 0;
     for (int x = 0; x < COLUMNS; x++) {
-      count += (playing_field[y][x] != 0);
+      count += (playing_field[y][x] != 0 && playing_field[y][x] != STATIC_ROW);
     }
     if (count == COLUMNS) {
       lines.push(y);
@@ -115,19 +115,13 @@ void TetrisGame::display_board() {
   for (int y = 0; y < ROWS; y++) {
     for (int x = 0; x < COLUMNS; x++) {
       switch (playing_field[y][x]) {
-      case 1:
-      case 2:
-      case 3:
-      case 4:
-      case 5:
-      case 6:
-      case 7:
+      case 0:
+        mvwprintw(game_window, y + 1, (2 * x) + 1, "  ");
+        break;
+      default:
         wattron(game_window, COLOR_PAIR(playing_field[y][x]));
         mvwprintw(game_window, y + 1, (2 * x) + 1, "  ");
         wattroff(game_window, COLOR_PAIR(playing_field[y][x]));
-        break;
-      default:
-        mvwprintw(game_window, y + 1, (2 * x) + 1, "  ");
         break;
       }
     }

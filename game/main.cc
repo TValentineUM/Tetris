@@ -1,4 +1,5 @@
 #include "boomer.hh"
+#include "fasttrack.hh"
 #include "pieces.hh"
 #include "tetris_game.hh"
 #include <chrono>
@@ -29,6 +30,7 @@ int main(int argc, char *argv[]) {
   } break;
   }
 
-  BoomerGame game(time(NULL), ips, player_no, game_id, 10);
+  // TetrisGame game(time(NULL), ips, player_no, game_id);
+  FastTrack game(time(NULL), ips, player_no, game_id, 10, 2);
   game.run();
 }
