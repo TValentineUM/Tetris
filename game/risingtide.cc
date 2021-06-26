@@ -25,8 +25,8 @@ int RisingTide::insert_lines() {
 void RisingTide::run() {
 
   game_setup();
-
-  thread t1(communicate_state, 0, std::ref(state), ips);
+  bool game_ended = false;
+  thread t1(communicate_state, 0, std::ref(state), ips, std::ref(game_ended));
   bool piece_flag = true;
   int counter = 0;
   tetromino new_piece;
@@ -53,6 +53,8 @@ void RisingTide::run() {
       new_lines = 0;
     }
   }
+  game_ended = true;
+  t1.join();
   clear();
   endwin();
   cout << "game ended" << endl;
