@@ -1,6 +1,7 @@
 #include "boomer.hh"
 #include "fasttrack.hh"
 #include "pieces.hh"
+#include "risingtide.hh"
 #include "tetris_game.hh"
 #include <chrono>
 #include <iostream>
@@ -31,6 +32,8 @@ int main(int argc, char *argv[]) {
   }
 
   // TetrisGame game(time(NULL), ips, player_no, game_id);
-  FastTrack game(time(NULL), ips, player_no, game_id, 10, 2);
+  // FastTrack game(time(NULL), ips, player_no, game_id, 10, 2);
+  RisingTide game(time(NULL), ips, player_no, game_id);
+
   game.run();
 }

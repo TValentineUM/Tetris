@@ -199,6 +199,9 @@ void TetrisGame::game_setup() {
   init_pair(6, COLOR_BLACK, COLOR_CYAN);
   init_pair(7, COLOR_BLACK, COLOR_WHITE);
 
+  init_color(STATIC_ROW, 255, 215, 0);
+  init_pair(STATIC_ROW, COLOR_BLACK, STATIC_ROW);
+
   game_window = newwin(ROWS + 2, (2 * COLUMNS) + 2, 3, 3);
   piece_window = newwin(7, 12, 3, 27);
   score_window = newwin(8, 17, 13, 27);
