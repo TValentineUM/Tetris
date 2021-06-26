@@ -1,5 +1,5 @@
-#include "../game-server/tprotocol.hh"
-#include "client.hh"
+//#include "../game-server/tprotocol.hh"
+#include "p2p.hh"
 #include <arpa/inet.h>
 #include <cstring>
 #include <iostream>

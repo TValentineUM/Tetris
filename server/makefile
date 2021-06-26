@@ -11,9 +11,9 @@ OBJ = server.cc
 MAINOBJ = main.o $(OBJ)
 
 %.o: %.cc $(DEPS)
-		$(CXX) -c -o $@ $< $(CXXFLAGS)
+	$(CXX) -c $< -o $@  $(CXXFLAGS)
 
-server: $(MAINOBJ)
+main: $(MAINOBJ)
 		$(CXX) -o $@ $^ $(CXXFLAGS)
 
 clean:

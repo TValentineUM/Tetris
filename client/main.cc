@@ -1,4 +1,4 @@
-#include "client.hh"
+#include "../client-server/client-server.hh"
 #include <cstdlib>
 #include <cstring>
 #include <curses.h>

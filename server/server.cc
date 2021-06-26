@@ -421,6 +421,13 @@ void handle_game(int game_id) {
 
   for (auto &[k, v] : match.players) {
     if (v) {
+      // auto player = player_list.find(k);
+      // if (player != player_list.end()) {
+      //   if (player->second.address.sin_addr == "127.0.0.1") {
+      //   }
+      //   if (player->address.)
+      // }
+      // if (player_list.at(k).)
       send_chat(k, "Your game has started nigga");
     }
   }

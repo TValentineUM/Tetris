@@ -16,6 +16,20 @@ using namespace std;
 #define MESSAGE_SIZE 255
 #define NAMESIZE 10
 #define LOBBY_TIME 5
+#define PRIVATE_P2P 50000 // Using a linux private port
+#define PUBLIC_P2P 42000  // Using a Linux user port
+#define LOCALHOST                                                              \
+  16777343 // Integer representation of localhost ip
+           //
+// Ports to be used when connected to localhost
+#define PLAYER_1_PORT "42001"
+#define PLAYER_2_PORT "42002"
+#define PLAYER_3_PORT "42003"
+#define PLAYER_4_PORT "42004"
+#define PLAYER_5_PORT "42005"
+#define PLAYER_6_PORT "42006"
+#define PLAYER_7_PORT "42007"
+#define PLAYER_8_PORT "42008"
 
 struct player_data {
   char name[NAMESIZE];

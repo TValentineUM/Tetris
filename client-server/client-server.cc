@@ -1,5 +1,5 @@
-#include "../game-server/tprotocol.hh"
-#include "client.hh"
+#include "../server/tprotocol.hh"
+#include "client-server.hh"
 #include <cstdlib>
 #include <cstring>
 #include <curses.h>
@@ -109,12 +109,8 @@ tmessage parse_message(string str) {
                 "Rising Tide gamemode does not take arguments");
           }
           string temp;
-          string t1;
-          while (ss >> temp) {
-            t1.append(temp);
-            t1.append(" ");
-          }
-          strcpy(msg.buffer, t1.c_str());
+          ss >> temp;
+          strcpy(msg.buffer, temp.c_str());
         } break;
         case 1: {
           if (arg_count != 2) {

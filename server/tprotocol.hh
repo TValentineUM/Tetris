@@ -33,7 +33,7 @@ enum tmessage_t : int32_t {
  */
 struct tmessage {
   tmessage_t message_type;
-  int32_t arg1, arg2, arg3;
+  int32_t arg1, arg2, arg3, arg4;
   char buffer[MESSAGE_LENGTH];
 
 } typedef tmessage;

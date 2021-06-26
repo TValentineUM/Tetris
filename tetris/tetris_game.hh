@@ -5,7 +5,7 @@
 #define COLUMNS 10
 #define STATIC_ROW 8
 
-#include "../client-client/client.hh"
+#include "../p2p/p2p.hh"
 #include "pieces.hh"
 #include <curses.h>
 #include <random>

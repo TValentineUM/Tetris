@@ -1,7 +1,7 @@
 #ifndef CLIENT_H_
 #define CLIENT_H_
 
-#include "../game-server/tprotocol.hh"
+#include "../server/tprotocol.hh"
 #include <curses.h>
 #include <mutex>
 #include <string>
