@@ -1,7 +1,7 @@
 #include "../client-server/client-server.hh"
 #include "../p2p/p2p.hh"
-#include "../tetris/boomer.hh"
 #include "../tetris/tetris_game.hh"
+#include "client.hh"
 
 #include <cstdlib>
 #include <cstring>
@@ -15,29 +15,14 @@
 #include <thread>
 #include <unistd.h> // Linux fds
 using namespace std;
+
 int main(int argc, char *argv[]) {
 
   char *hostname = argv[1];
   char *port = argv[2];
   int sockfd = establish_connection(hostname, port);
 
-  initscr();
-  cbreak();
-  echo();
-  curs_set(0);
-
-  int xMax, yMax;
-  getmaxyx(stdscr, yMax, xMax);
-  WINDOW *chat_window = newwin(yMax - 10, xMax, 0, 0);
-  WINDOW *text_window = newwin(5, xMax, yMax - 5, 0);
-
-  box(chat_window, 0, 0);
-  box(text_window, 0, 0);
-  refresh();
-  wmove(text_window, 1, 1);
-
-  wrefresh(chat_window);
-  wrefresh(text_window);
+  start_irc();
 
   struct pollfd pfds[2];
   pfds[0].fd = 0; // STDIN
@@ -45,6 +30,9 @@ int main(int argc, char *argv[]) {
 
   pfds[1].fd = sockfd;
   pfds[1].events = POLLIN;
+
+  int xMax, yMax;
+  getmaxyx(stdscr, yMax, xMax);
 
   for (;;) {
     move(yMax - 4, 1);
@@ -57,66 +45,9 @@ int main(int argc, char *argv[]) {
         if (pfds[i].revents & POLLIN) {
           if (pfds[i].fd == 0) {
             // Standard Input is ready
-            char buffer[MESSAGE_LENGTH];
-            memset(buffer, 0, MESSAGE_LENGTH * sizeof(char));
-            getstr(buffer);
-            wclear(text_window);
-            box(text_window, 0, 0);
-            // Checking theere is actual data to send
-            if (strlen(buffer)) {
-              tmessage msg = parse_message(buffer);
-              if (send(sockfd, (char *)&msg, sizeof(tmessage), 0) < 0) {
-                perror("ERROR writing to socket");
-                close(sockfd);
-                endwin();
-                exit(1);
-              }
-            }
-            wrefresh(text_window);
+            send_message(sockfd);
           } else if (pfds[i].fd == sockfd) {
-            char *buffer = (char *)malloc(sizeof(tmessage));
-            int numbytes = recv(sockfd, (char *)buffer, sizeof(tmessage), 0);
-            if (numbytes == 0) {
-              endwin();
-              cout << "Server Disconnected" << endl;
-              close(sockfd);
-              exit(0);
-            } else if (numbytes < 0) {
-              endwin();
-              perror("ERROR reading from socket");
-              close(sockfd);
-              exit(1);
-            }
-            tmessage *msg = (tmessage *)buffer;
-            switch (msg->message_type) {
-            case CHAT: {
-              chat_messages.push_back(string(msg->buffer));
-              wclear(chat_window);
-              box(chat_window, 0, 0);
-
-              if (chat_messages.size() > (yMax - 12)) {
-                chat_messages.erase(chat_messages.begin(),
-                                    chat_messages.begin() +
-                                        (chat_messages.size() - (yMax - 12)));
-              }
-              for (int i = 0; i < chat_messages.size(); i++) {
-                mvwprintw(chat_window, i + 1, 1, chat_messages[i].c_str());
-                wrefresh(chat_window);
-              }
-              break;
-            }
-            case INIT_GAME: {
-              erase();
-              auto ips = decode_hostnames(string(msg->buffer));
-              BoomerGame game(time(NULL), ips, msg->arg1, 0, sockfd, 35);
-              game.run();
-              break;
-            }
-
-            default:
-              break;
-            }
-            free(buffer);
+            recieve_message(sockfd);
           }
         }
       }

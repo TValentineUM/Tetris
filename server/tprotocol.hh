@@ -21,6 +21,7 @@ enum tmessage_t : int32_t {
   GO,
   SCORE_UPDATE,
   INIT_GAME,
+  GAME_END
 };
 
 /**
@@ -33,7 +34,7 @@ enum tmessage_t : int32_t {
  */
 struct tmessage {
   tmessage_t message_type;
-  int32_t arg1, arg2, arg3, arg4;
+  int32_t arg1, arg2, arg3, arg4, arg5;
   char buffer[MESSAGE_LENGTH];
 
 } typedef tmessage;

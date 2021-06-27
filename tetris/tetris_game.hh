@@ -43,7 +43,9 @@ protected:
 public:
   TetrisGame(int seed, std::vector<std::pair<std::string, std::string>> ips,
              int player_no, int game_no, int server_socket);
+
   void run();
+  gamestate &get_final_score();
 };
 
 #endif // BOARD_H_

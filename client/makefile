@@ -16,9 +16,9 @@ P2P_OBJ = ../p2p/p2p.o
 GAME_DEPS = ../tetris/tetris_game.hh ../tetris/pieces.hh ../tetris/boomer.hh ../tetris/fasttrack.hh ../tetris/risingtide.hh
 GAME_OBJ = ../tetris/tetris_game.o ../tetris/boomer.o ../tetris/fasttrack.o ../tetris/risingtide.o
 
-DEPS =  $(CLIENT_SERVER_DEPS) $(GAME_DEPS) $(P2P_DEPS) ../server/tprotocol.hh
+DEPS =  client.hh $(CLIENT_SERVER_DEPS) $(GAME_DEPS) $(P2P_DEPS) ../server/tprotocol.hh
 
-MAINOBJ = main.o $(CLIENT_SERVER_OBJ) $(GAME_OBJ) $(P2P_OBJ)
+MAINOBJ = main.o client.o $(CLIENT_SERVER_OBJ) $(GAME_OBJ) $(P2P_OBJ)
 
 %.o: %.cc $(DEPS)
 		$(CXX) -c $< -o $@  $(CXXFLAGS)
@@ -26,7 +26,9 @@ MAINOBJ = main.o $(CLIENT_SERVER_OBJ) $(GAME_OBJ) $(P2P_OBJ)
 main: $(MAINOBJ)
 		$(CXX) -o $@ $^ $(CXXFLAGS) -lncurses -lpthread
 
+.PHONY: clean
 clean:
-	rm *.o
+	-rm -f main $(MAINOBJ)
+
 
 # end

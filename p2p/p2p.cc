@@ -80,6 +80,7 @@ void communicate_state(int sock_fd, gamestate &state,
 
   t1.join();
   t2.join();
+  close(new_sock_fd);
 }
 void recieve_state(gamestate &state, int sock_fd) {
 
@@ -144,10 +145,9 @@ void broadcast_state(int sock_fd, gamestate &state,
     if (counter == 0) {
       tmessage server_msg;
       server_msg.message_type = (tmessage_t)htonl((int32_t)SCORE_UPDATE);
-      server_msg.arg1 = 0;
-      server_msg.arg2 = htonl(state.player_no);
-      server_msg.arg3 = htonl(state.local.score);
-      server_msg.arg4 = htonl(state.local.lines);
+      server_msg.arg1 = htonl(state.game_no);
+      server_msg.arg2 = htonl(state.local.score);
+      server_msg.arg3 = htonl(state.local.lines);
       send(sock_fd, (char *)&server_msg, sizeof(server_msg), 0);
     }
 

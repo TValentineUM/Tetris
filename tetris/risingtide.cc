@@ -36,11 +36,12 @@ void RisingTide::run() {
 
   while (do_gametick(new_piece, piece_flag, counter) == 0) {
     auto old_lines = total_lines;
+    total_lines = 0;
+    new_lines = 0;
     for (auto &[k, v] : state.players) {
-      new_lines += v.lines;
       total_lines += v.lines;
     }
-    new_lines -= old_lines;
+    new_lines = total_lines - old_lines;
     if (new_lines > 0) {
       if (insert_lines() != 0) {
         break;

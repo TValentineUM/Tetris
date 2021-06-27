@@ -319,3 +319,5 @@ void TetrisGame::run() {
   endwin();
   cout << "game ended" << endl;
 }
+
+gamestate &TetrisGame::get_final_score() { return std::ref(state); }

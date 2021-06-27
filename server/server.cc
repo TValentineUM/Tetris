@@ -14,7 +14,6 @@
 #include <sys/epoll.h>
 #include <sys/socket.h>
 #include <unistd.h>
-
 using namespace std;
 
 void relay(std::string message) {
@@ -183,8 +182,8 @@ void handle_message(tmessage *msg, int sock) {
   case BATTLE: {
     game new_game;
     new_game.gamemode = msg->arg1; // Setting the gamemode
-    new_game.arg1 = msg->arg1;
-    new_game.arg2 = msg->arg2;
+    new_game.arg1 = msg->arg2;
+    new_game.arg2 = msg->arg3;
     cout << "Names: " << msg->buffer << endl;
     vector<string> players;
     string temp;
@@ -259,15 +258,31 @@ void handle_message(tmessage *msg, int sock) {
     }
     break;
   }
+  case GAME_END: {
+    int game_number = msg->arg1;
+    int score = msg->arg2;
+    int lines = msg->arg3;
+    auto game = ongoing_games.find(game_number);
+    if (game != ongoing_games.end()) {
+      // game->second.check_winner();
+      game->second.finished_player(sock, score, lines);
+    } else {
+      cerr << "Unable to find ongoing game: " << game_number << endl;
+    }
+    break;
+  }
   case SCORE_UPDATE: {
     int game_number = msg->arg1;
-    int player_number = msg->arg2;
-    int score = msg->arg3;
-    int lines = msg->arg4;
-    cout_mutex.lock();
-    cout << "Game: " << game_number << "\tPlayer: " << player_number
-         << "\tScore: " << score << "\tLines: " << lines << endl;
-    cout_mutex.unlock();
+    int score = msg->arg2;
+    int lines = msg->arg3;
+    auto game = ongoing_games.find(game_number);
+    if (game != ongoing_games.end()) {
+      game->second.update_player(sock, score, lines);
+      cout_mutex.lock();
+      cout << "Score Update; Game ID: " << game_number << " Score: " << score
+           << " Lines: " << lines << endl;
+      cout_mutex.unlock();
+    }
     break;
   }
   default:
@@ -447,7 +462,11 @@ void handle_game(int game_id) {
   }
   tmessage msg;
   msg.message_type = INIT_GAME;
-
+  msg.arg2 = match.gamemode;
+  msg.arg3 = game_id;
+  msg.arg4 = match.arg1;
+  msg.arg5 = match.arg2;
+  vector<int> socket_ids;
   int player_no;
   for (auto ip : ips) {
     string temp;
@@ -460,5 +479,88 @@ void handle_game(int game_id) {
     temp += get<1>(ip);
     strcpy(msg.buffer, temp.c_str());
     send(get<0>(ip), (char *)&msg, sizeof(tmessage), 0);
+    socket_ids.push_back(get<0>(ip));
   }
+  active_game new_game(match.gamemode, socket_ids);
+  ongoing_games.insert({game_id, new_game});
+}
+
+active_game::active_game(int gamemode, vector<int> players)
+    : gamemode{gamemode}, start{std::chrono::steady_clock::now()} {
+  for (auto i : players) {
+    state.insert({i, {game_data(), false}});
+  }
+}
+
+void active_game::remove_player(int id) {
+  state.erase(id);
+  check_winner();
+}
+
+void active_game::finished_player(int id, int score, int lines) {
+  auto player = state.find(id);
+  if (player != state.end()) {
+    get<1>(player->second) = true; // Indicating the player has finished
+    get<0>(player->second).duration =
+        std::chrono::steady_clock::now() - start; // Setting the game duration
+    get<0>(player->second).score = score;
+    get<0>(player->second).lines = lines;
+    check_winner();
+  } else {
+    cerr << "Unknown Player" << endl;
+  }
+}
+
+void active_game::check_winner() {
+  vector<pair<int, game_data>> players;
+  for (auto &[k, v] : state) {
+    if (!get<1>(v)) {
+      return;
+    } else {
+      players.push_back({k, get<0>(v)});
+    }
+  }
+
+  auto game_mode = gamemode; // for the lambda idk why man
+  auto order = [game_mode](pair<int, game_data> &p1,
+                           pair<int, game_data> &p2) -> bool {
+    switch (game_mode) {
+    case RISING_TIDE:
+      return get<1>(p1).duration >
+             get<1>(p2).duration; // Has to be reversed for max element
+    case BOOMER:
+      return get<1>(p1).score < get<1>(p2).score;
+    case FAST_TRACK:
+      // We need the most lines completed first, duration only matters when they
+      // are equal
+      if (get<1>(p1).lines < get<1>(p2).lines) {
+        return true;
+      } else if (get<1>(p1).lines > get<1>(p2).lines) {
+        return false;
+      } else {
+        return get<1>(p1).duration < get<1>(p2).duration;
+      }
+      break;
+    default:
+      cerr << "Unknown Gamemode" << endl;
+      break;
+    }
+  };
+
+  auto winner = max_element(players.begin(), players.end(), order);
+  // This is so not good BUG
+  string str = player_list.find(get<0>(*winner))->second.name;
+
+  str += " won the game, score: " + to_string(get<1>(*winner).score) +
+         ", lines:" + to_string(get<1>(*winner).lines);
+
+  for (auto &[k, v] : state) {
+    send_chat(k, str);
+  }
+}
+
+void active_game::update_player(int player_no, int score, int lines) {
+  auto player = state.find(player_no);
+  get<0>(player->second).score = score;
+  get<0>(player->second).lines = lines;
 }
