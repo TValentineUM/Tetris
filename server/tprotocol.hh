@@ -19,6 +19,7 @@ enum tmessage_t : int32_t {
   QUICKPLAY,
   CHILL,
   GO,
+  IGNORE,
   SCORE_UPDATE,
   INIT_GAME,
   GAME_END

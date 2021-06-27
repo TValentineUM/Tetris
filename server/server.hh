@@ -16,11 +16,14 @@
 #define MESSAGE_SIZE 255
 #define NAMESIZE 10
 #define LOBBY_TIME 5
-#define PRIVATE_P2P 50000 // Using a linux private port
-#define PUBLIC_P2P 42000  // Using a Linux user port
-#define LOCALHOST                                                              \
-  16777343 // Integer representation of localhost ip
-           //
+#define PRIVATE_P2P 50000  // Using a linux private port
+#define PUBLIC_P2P 42000   // Using a Linux user port
+#define LOCALHOST 16777343 // Integer representation of localhost ip
+#define MAX_BOOMER_DURATION                                                    \
+  300 // 5 minutes
+      //
+#define SEND_WAIT_MS 50 * (1000)
+
 // Ports to be used when connected to localhost
 #define DEFAULT_PORT 42001
 

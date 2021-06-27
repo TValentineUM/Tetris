@@ -8,6 +8,7 @@
 #include <iterator>
 #include <netdb.h>
 #include <poll.h>
+#include <random>
 #include <signal.h>
 #include <sstream>
 #include <string>
@@ -37,8 +38,13 @@ void send_multiple(int sock_fd, std::vector<string> msgs) {
   if (lockf(sock_fd, F_LOCK, 0) < 0) {
     perror("lockf");
   }
+  tmessage chat;
+  chat.message_type = CHAT;
   for (auto msg : msgs) {
-    send_chat(sock_fd, msg);
+    strcpy(chat.buffer, msg.c_str());
+    if (send(sock_fd, (char *)(&chat), sizeof(tmessage), 0) < 0) {
+      perror("send");
+    };
   }
   if (lockf(sock_fd, F_ULOCK, 0) < 0) {
     perror("lockf");
@@ -249,12 +255,31 @@ void handle_message(tmessage *msg, int sock) {
           g->second.players.find(sock); // Checking if we are part of the game
       if (entry != g->second.players.end()) {
         entry->second = true;
+        send_chat(sock, "You sucessfully accepted to join the game");
       } else {
         send_chat(sock, "You were not invited to the game in question");
       }
       game_list_mutex.unlock();
     } else {
       send_chat(sock, "The game you requested to join does not exist!");
+    }
+    break;
+  }
+  case IGNORE: {
+    game_list_mutex.lock();
+    auto g = game_list.find(msg->arg1);
+    if (g != game_list.end()) {
+      auto entry =
+          g->second.players.find(sock); // Checking if we are part of the game
+      if (entry != g->second.players.end()) {
+        entry->second = false;
+        send_chat(sock, "You sucessfully decline the game");
+      } else {
+        send_chat(sock, "You were not invited to the game in question");
+      }
+      game_list_mutex.unlock();
+    } else {
+      send_chat(sock, "The game you requested to decline does not exist!");
     }
     break;
   }
@@ -269,7 +294,13 @@ void handle_message(tmessage *msg, int sock) {
     } else {
       cerr << "Unable to find ongoing game: " << game_number << endl;
     }
-    break;
+    player_list_mutex.lock();
+    auto player = player_list.find(sock);
+    // erase-remove idiom
+    player->second.games.erase(remove(player->second.games.begin(),
+                                      player->second.games.end(), game_number),
+                               player->second.games.end());
+    player_list_mutex.unlock();
   }
   case SCORE_UPDATE: {
     int game_number = msg->arg1;
@@ -278,13 +309,91 @@ void handle_message(tmessage *msg, int sock) {
     auto game = ongoing_games.find(game_number);
     if (game != ongoing_games.end()) {
       game->second.update_player(sock, score, lines);
-      cout_mutex.lock();
-      cout << "Score Update; Game ID: " << game_number << " Score: " << score
-           << " Lines: " << lines << endl;
-      cout_mutex.unlock();
+      // cout_mutex.lock();
+      // cout << "Score Update; Game ID: " << game_number << " Score: " << score
+      //      << " Lines: " << lines << endl;
+      // cout_mutex.unlock();
     }
     break;
   }
+  case QUICKPLAY: {
+    std::random_device rd;
+    std::mt19937 gen(rd());
+    std::uniform_int_distribution<> game_distribution(0, 2); // Valid Gamemodes
+    std::uniform_int_distribution<> invite_distribution(0,
+                                                        player_list.size() - 1);
+    game new_game;
+    int gamemode = game_distribution(gen);
+    new_game.gamemode = gamemode;
+    switch (gamemode) {
+    case BOOMER: {
+      std::uniform_int_distribution<> time_distribution(0,
+                                                        300); // Valid Gamemodes
+      new_game.arg1 = time_distribution(gen);
+
+    } break;
+    case FAST_TRACK: {
+      std::uniform_int_distribution<> line_distribution(0,
+                                                        10); // Valid Gamemodes
+      new_game.arg1 = line_distribution(gen);
+      new_game.arg2 = line_distribution(gen);
+    } break;
+    default:
+      break;
+    }
+
+    // weve generated the game params, now we need the players
+    while (new_game.players.size() < msg->arg1) {
+      auto iter = player_list.begin();
+      advance(iter, invite_distribution(gen)); // Get a random player
+      if (iter->first != sock) {
+        new_game.players.insert({iter->first, false});
+      }
+    }
+    new_game.players.insert({sock, true});
+
+    // Creating Game
+    game_list_mutex.lock();
+    int game_number = ++game_counter;
+    game_list.emplace(game_number, new_game);
+    game_list_mutex.unlock();
+
+    // Assigning Game To each participant
+    player_list_mutex.lock();
+    for (auto &[k, v] : new_game.players) {
+      auto entry = player_list.find(k);
+      if (entry != player_list.end()) {
+        entry->second.games.push_back(game_number);
+      }
+    }
+
+    player_list_mutex.unlock();
+    thread t1(handle_game, game_number);
+    string playername = player_list.at(sock).name;
+
+    for (auto &[k, v] : new_game.players) {
+      if (k != sock) {
+        send_chat(
+            k, "## " + playername + " has challenged you to a " +
+                   [](int x) {
+                     switch (x) {
+                     case RISING_TIDE:
+                       return "Rising Tide";
+                     case FAST_TRACK:
+                       return "Fast Track";
+                     case BOOMER:
+                       return "Boomer";
+                     default:
+                       return "";
+                     }
+                   }(msg->arg1) +
+                   " battle (id = " + to_string(game_number) + ")");
+      } else {
+        send_chat(k, "Game Created with id=" + to_string(game_number));
+      }
+    }
+    t1.detach();
+  } break;
   default:
     cout << "Another Message Type: " << msg->message_type << endl;
     cout << msg->buffer << endl;
@@ -363,13 +472,18 @@ vector<string> get_leaderboard(int game) {
 }
 
 void send_chat(int sock, string str) {
-  tmessage *msg = (tmessage *)malloc(sizeof(tmessage));
-  msg->message_type = CHAT;
-  strcpy(msg->buffer, str.c_str());
-  if (send(sock, msg, sizeof(tmessage), 0) < 0) {
+  if (lockf(sock, F_LOCK, 0) < 0) {
+    perror("lockf");
+  }
+  tmessage msg;
+  msg.message_type = CHAT;
+  strcpy(msg.buffer, str.c_str());
+  if (send(sock, (char *)&msg, sizeof(tmessage), 0) < 0) {
     perror("send");
   };
-  free(msg);
+  if (lockf(sock, F_ULOCK, 0) < 0) {
+    perror("lockf");
+  }
 }
 
 void run_server(int portno) {
@@ -415,6 +529,14 @@ void run_server(int portno) {
       cout << "New Client with IP: " << inet_ntoa(addr_in.sin_addr)
            << " On port: " << addr_in.sin_port << " with socket number "
            << newsockfd << endl;
+
+      // Setting timeouts for send
+      struct timeval timeout;
+      timeout.tv_usec = SEND_WAIT_MS;
+      if (setsockopt(newsockfd, SOL_SOCKET, SO_SNDTIMEO, (char *)&timeout,
+                     sizeof(timeout)) < 0) {
+        cerr << "Setsock opt Failed" << endl;
+      }
       thread t1(handle_connection, newsockfd);
       current_threads.push_back(move(t1));
     }
@@ -454,12 +576,21 @@ void handle_game(int game_id) {
 
   vector<tuple<int, string>> ips;
   for (auto &[k, v] : match.players) {
+    auto player = player_list.find(k);
     if (v) {
-      auto player = player_list.find(k);
       string ip = inet_ntoa(player->second.address.sin_addr) + port_assigner();
       ips.push_back({k, ip});
+    } else {
+      player->second.games.erase(remove(player->second.games.begin(),
+                                        player->second.games.end(), game_id),
+                                 player->second.games.end());
     }
   }
+  if (ips.size() < 2) {
+    // Could send a message here
+    return;
+  }
+
   tmessage msg;
   msg.message_type = INIT_GAME;
   msg.arg2 = match.gamemode;
