@@ -83,6 +83,7 @@ void recieve_message(int sockfd) {
     exit(1);
   }
   tmessage *msg = (tmessage *)buffer;
+  decode_message(msg);
   switch (msg->message_type) {
   case CHAT: {
     chat_messages.push_back(string(msg->buffer));
@@ -106,17 +107,17 @@ void recieve_message(int sockfd) {
     gamestate score;
     switch (msg->arg2) {
     case BOOMER: {
-      BoomerGame game(time(NULL), ips, msg->arg1, msg->arg3, sockfd, msg->arg4);
+      BoomerGame game(msg->arg6, ips, msg->arg1, msg->arg3, sockfd, msg->arg4);
       game.run();
       score = game.get_final_score();
     } break;
     case RISING_TIDE: {
-      RisingTide game(time(NULL), ips, msg->arg1, msg->arg3, sockfd);
+      RisingTide game(msg->arg6, ips, msg->arg1, msg->arg3, sockfd);
       game.run();
       score = game.get_final_score();
     } break;
     case FAST_TRACK: {
-      FastTrack game(time(NULL), ips, msg->arg1, msg->arg3, sockfd, msg->arg4,
+      FastTrack game(msg->arg6, ips, msg->arg1, msg->arg3, sockfd, msg->arg4,
                      msg->arg5);
       game.run();
       score = game.get_final_score();
@@ -125,10 +126,11 @@ void recieve_message(int sockfd) {
       break;
     }
     tmessage reply_msg;
-    reply_msg.message_type = (tmessage_t)htonl((int32_t)GAME_END);
-    reply_msg.arg1 = htonl(msg->arg3); // Game ID
-    reply_msg.arg2 = htonl(score.local.score);
-    reply_msg.arg3 = htonl(score.local.lines);
+    reply_msg.message_type = GAME_END;
+    reply_msg.arg1 = msg->arg3; // Game ID
+    reply_msg.arg2 = score.local.score;
+    reply_msg.arg3 = score.local.lines;
+    encode_message(reply_msg);
     if (send(sockfd, (char *)&reply_msg, sizeof(tmessage), 0) < 0) {
       perror("ERROR writing to socket");
       close(sockfd);

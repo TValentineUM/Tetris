@@ -106,6 +106,7 @@ void recieve_state(gamestate &state, int sock_fd) {
       // return;
     } else {
       update_msg *msg = (update_msg *)buffer;
+      decode_state(msg);
       if (state.players.find(msg->player_no) != state.players.end()) {
         auto player = state.players.find(msg->player_no);
         player->second.score = msg->score;
@@ -133,6 +134,7 @@ void broadcast_state(int sock_fd, gamestate &state,
     msg.score = state.local.score;
     msg.lines = state.local.lines;
     msg.player_no = state.player_no;
+    encode_state(msg);
     for (auto &[sock, other] : peers) {
       int num_bytes;
       if (sendto(sock, (char *)&msg, sizeof(update_msg), 0,
@@ -154,4 +156,16 @@ void broadcast_state(int sock_fd, gamestate &state,
     this_thread::sleep_for(
         TICKDURATION); // 20 updates per second - inline with titanfall
   }
+}
+
+void encode_state(update_msg &msg) {
+  msg.score = htonl(msg.score);
+  msg.lines = htonl(msg.lines);
+  msg.player_no = htonl(msg.player_no);
+}
+
+void decode_state(update_msg *msg) {
+  msg->score = ntohl(msg->score);
+  msg->lines = ntohl(msg->lines);
+  msg->player_no = ntohl(msg->player_no);
 }

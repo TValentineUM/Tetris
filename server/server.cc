@@ -18,14 +18,15 @@
 using namespace std;
 
 void relay(std::string message) {
-  tmessage *msg = (tmessage *)malloc(sizeof(tmessage));
-  msg->message_type = CHAT;
-  strcpy(msg->buffer, message.c_str());
+  tmessage msg;
+  msg.message_type = CHAT;
+  strcpy(msg.buffer, message.c_str());
+  encode_message(msg);
   for (auto &[k, v] : player_list) {
     if (lockf(k, F_ULOCK, 0) < 0) {
       perror("lockf");
     }
-    if (send(k, msg, sizeof(tmessage), 0) < 0) {
+    if (send(k, (char *)&msg, sizeof(tmessage), 0) < 0) {
       perror("send");
     };
     if (lockf(k, F_ULOCK, 0) < 0) {
@@ -40,6 +41,7 @@ void send_multiple(int sock_fd, std::vector<string> msgs) {
   }
   tmessage chat;
   chat.message_type = CHAT;
+  encode_message(chat);
   for (auto msg : msgs) {
     strcpy(chat.buffer, msg.c_str());
     if (send(sock_fd, (char *)(&chat), sizeof(tmessage), 0) < 0) {
@@ -50,7 +52,6 @@ void send_multiple(int sock_fd, std::vector<string> msgs) {
     perror("lockf");
   }
 }
-
 std::string random_string(size_t length) {
   auto randchar = []() -> char {
     const char charset[] = "0123456789"
@@ -133,14 +134,26 @@ tmessage *decode_message(char *buffer) {
   msg->arg2 = ntohl(msg->arg2);
   msg->arg3 = ntohl(msg->arg3);
   msg->arg4 = ntohl(msg->arg4);
+  msg->arg5 = ntohl(msg->arg5);
+  msg->arg6 = ntohl(msg->arg6);
   return msg;
 }
 
-void encode_message(tmessage *msg) {
-  msg->message_type = (tmessage_t)htonl((int32_t)msg->message_type);
-  msg->arg1 = htonl(msg->arg1);
-  msg->arg2 = htonl(msg->arg2);
-  msg->arg3 = htonl(msg->arg3);
+void encode_message(tmessage &msg) {
+  msg.message_type = (tmessage_t)htonl((int32_t)msg.message_type);
+  msg.arg1 = htonl(msg.arg1);
+  msg.arg2 = htonl(msg.arg2);
+  msg.arg3 = htonl(msg.arg3);
+  msg.arg4 = htonl(msg.arg4);
+  msg.arg5 = htonl(msg.arg5);
+  msg.arg6 = htonl(msg.arg6);
+}
+
+void send_message(tmessage msg, int sock_fd) {
+  encode_message(msg);
+  if (send(sock_fd, (char *)(&msg), sizeof(tmessage), 0) < 0) {
+    perror("send");
+  }
 }
 
 void handle_message(tmessage *msg, int sock) {
@@ -183,6 +196,18 @@ void handle_message(tmessage *msg, int sock) {
   case LEADERBOARD: {
     auto scores = get_leaderboard(msg->arg1);
     send_multiple(sock, scores);
+    break;
+  }
+  case LEADERBOARDS: {
+    vector<string> gamemodes = {"Chiller", "Boomer", "Fast Track",
+                                "Rising Tide"};
+    vector<string> messages;
+    for (int i = 0; i <= 3; i++) {
+      messages = get_leaderboard(i);
+      messages.insert(messages.begin(), gamemodes.back());
+      gamemodes.pop_back();
+      send_multiple(sock, messages);
+    }
     break;
   }
   case BATTLE: {
@@ -394,6 +419,45 @@ void handle_message(tmessage *msg, int sock) {
     }
     t1.detach();
   } break;
+  case PLAYERSTATS: {
+    player_list_mutex.lock();
+    auto local_plist(player_list);
+    player_list_mutex.unlock();
+
+    auto formatted_out = [](string p1, string p2, string p3, string p4) {
+      stringstream ss;
+      ss << left << setw(NAMESIZE + 4) << setfill(' ') << p1;
+      ss << left << setw(NAMESIZE + 4) << setfill(' ') << p2;
+      ss << left << setw(NAMESIZE + 4) << setfill(' ') << p3;
+      ss << left << setw(NAMESIZE + 4) << setfill(' ') << p4;
+      return ss.str();
+    };
+
+    vector<string> scores;
+
+    auto scores_out = [formatted_out, &scores](string name, int score,
+                                               tuple<int, int> stats) {
+      scores.push_back(formatted_out(name, to_string(score),
+                                     to_string(get<0>(stats)),
+                                     to_string(get<1>(stats))));
+    };
+
+    for (auto &[k, v] : local_plist) {
+      string str = "Player: " + string(v.name);
+      scores.push_back(str);
+      formatted_out("Mode", "Score", "Wins", "Losses");
+      scores_out("Rising", v.rising, v.rising_games);
+      scores_out("Boomer", v.boomer, v.boomer_games);
+      scores_out("FastTrack", v.fasttrack, v.fasttrack_games);
+      scores.push_back(
+          formatted_out("Chiller", to_string(v.chill), "N/AA", "N/A"));
+      send_multiple(sock, scores);
+      scores.clear();
+      this_thread::sleep_for(
+          chrono::milliseconds(250)); // As to allow the user to read a bit
+    }
+
+  } break;
   default:
     cout << "Another Message Type: " << msg->message_type << endl;
     cout << msg->buffer << endl;
@@ -450,7 +514,7 @@ vector<string> get_leaderboard(int game) {
   };
 
   for (auto iter = plist.begin();
-       iter != plist.end() || iter < plist.begin() + 2; iter++) {
+       iter < plist.end() && iter != plist.begin() + 3; iter++) {
     switch (game) {
     case RISING_TIDE:
       scores_out(iter->name, iter->rising, iter->rising_games);
@@ -478,6 +542,7 @@ void send_chat(int sock, string str) {
   tmessage msg;
   msg.message_type = CHAT;
   strcpy(msg.buffer, str.c_str());
+  encode_message(msg);
   if (send(sock, (char *)&msg, sizeof(tmessage), 0) < 0) {
     perror("send");
   };
@@ -591,12 +656,14 @@ void handle_game(int game_id) {
     return;
   }
 
+  random_device rd;
   tmessage msg;
   msg.message_type = INIT_GAME;
   msg.arg2 = match.gamemode;
   msg.arg3 = game_id;
   msg.arg4 = match.arg1;
   msg.arg5 = match.arg2;
+  msg.arg6 = rd(); // Game Seed
   vector<int> socket_ids;
   int player_no;
   for (auto ip : ips) {
@@ -609,15 +676,16 @@ void handle_game(int game_id) {
     msg.arg1 = player_no++;
     temp += get<1>(ip);
     strcpy(msg.buffer, temp.c_str());
-    send(get<0>(ip), (char *)&msg, sizeof(tmessage), 0);
+    send_message(msg, get<0>(ip));
+    // send(get<0>(ip), (char *)&msg, sizeof(tmessage), 0);
     socket_ids.push_back(get<0>(ip));
   }
-  active_game new_game(match.gamemode, socket_ids);
+  active_game new_game(match.gamemode, socket_ids, match.arg2);
   ongoing_games.insert({game_id, new_game});
 }
 
-active_game::active_game(int gamemode, vector<int> players)
-    : gamemode{gamemode}, start{std::chrono::steady_clock::now()} {
+active_game::active_game(int gamemode, vector<int> players, int arg2)
+    : gamemode{gamemode}, start{std::chrono::steady_clock::now()}, arg{arg2} {
   for (auto i : players) {
     state.insert({i, {game_data(), false}});
   }
@@ -652,9 +720,10 @@ void active_game::check_winner() {
     }
   }
 
-  auto game_mode = gamemode; // for the lambda idk why man
-  auto order = [game_mode](pair<int, game_data> &p1,
-                           pair<int, game_data> &p2) -> bool {
+  auto game_mode = gamemode; // for the lambda idk why
+  int lines = arg;
+  auto order = [game_mode, lines](pair<int, game_data> &p1,
+                                  pair<int, game_data> &p2) -> bool {
     switch (game_mode) {
     case RISING_TIDE:
       return get<1>(p1).duration >
@@ -664,16 +733,18 @@ void active_game::check_winner() {
     case FAST_TRACK:
       // We need the most lines completed first, duration only matters when they
       // are equal
-      if (get<1>(p1).lines < get<1>(p2).lines) {
-        return true;
-      } else if (get<1>(p1).lines > get<1>(p2).lines) {
-        return false;
+      if (get<1>(p1).lines < lines) {
+        return get<1>(p1).lines < get<1>(p2).lines;
       } else {
-        return get<1>(p1).duration < get<1>(p2).duration;
+        if (get<1>(p1).lines >= lines && get<1>(p2).lines >= lines) {
+          return get<1>(p1).duration < get<1>(p2).duration;
+        } else {
+          return get<1>(p1).lines < get<1>(p2).lines;
+        }
       }
       break;
     default:
-      cerr << "Unknown Gamemode" << endl;
+      throw std::logic_error("Unkown gamemode");
       break;
     }
   };

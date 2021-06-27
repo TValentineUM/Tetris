@@ -61,11 +61,12 @@ public:
 class active_game {
 private:
   int gamemode;
+  int arg;
   std::chrono::time_point<std::chrono::steady_clock> start; // getting the time
   std::map<int, std::pair<game_data, bool>> state; // Bool is set on game_end
 
 public:
-  active_game(int gamemode, std::vector<int>);
+  active_game(int gamemode, std::vector<int>, int arg);
   void remove_player(int);
   void check_winner();
   void finished_player(int, int, int);
@@ -100,7 +101,8 @@ void send_chat(int, std::string);
 void send_multiple(int, std::vector<std::string>);
 std::vector<std::string> get_leaderboard(int);
 tmessage *decode_message(char *);
-void encode_message(tmessage *);
+void encode_message(tmessage &);
+void send_message(tmessage, int);
 std::vector<int> get_socket_from_playername(std::vector<std::string>);
 
 #endif // SERVER_H_

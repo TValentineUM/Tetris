@@ -64,7 +64,7 @@ tmessage parse_message(string str) {
       } else {
         throw invalid_argument(
             "Unable to parse: \'" + str +
-            "\', the correct sytnax is \'!leaderboard [1-2]\'");
+            "\', the correct sytnax is \'!leaderboard [0-3]\'");
       }
     } else if (regex_match(command, CMD_PLAYERS)) {
       msg.message_type = (tmessage_t)htonl((int32_t)PLAYERS);
@@ -72,17 +72,9 @@ tmessage parse_message(string str) {
         throw invalid_argument("Unable to parse: \'" + str +
                                "\', the correct sytnax is \'!players\'");
       }
-    } else if (regex_match(command, CMD_PLAYERSTATS)) {
+    } else if (regex_match(str, CMD_PLAYERSTATS)) {
       msg.message_type = (tmessage_t)htonl((int32_t)PLAYERSTATS);
-      if (regex_match(str, CMD_PLAYERSTATS_FULL)) {
-        ss >> command;
-        strcpy(msg.buffer, command.c_str());
-      } else {
-        throw invalid_argument(
-            "Unable to parse: \'" + str +
-            "\', the correct sytnax is \'!playerstats <playername>\'. The "
-            "player name must not exceed 10 characters");
-      }
+
     } else if (regex_match(command, CMD_NICKNAME)) {
       msg.message_type = (tmessage_t)htonl((int32_t)NICKNAME);
       if (regex_match(str, CMD_NICKNAME_FULL)) {
@@ -204,6 +196,8 @@ tmessage parse_message(string str) {
       } else {
         throw invalid_argument("GO needs a number");
       }
+    } else if (regex_match(command, CMD_LEADERBOARDS)) {
+      msg.message_type = (tmessage_t)htonl((int32_t)LEADERBOARDS);
     } else {
       throw invalid_argument("Unable to parse command");
     }
@@ -213,4 +207,26 @@ tmessage parse_message(string str) {
     strcpy(msg.buffer, str.c_str());
     return msg;
   }
+}
+
+tmessage *decode_message(tmessage *buffer) {
+  tmessage *msg = (tmessage *)buffer;
+  msg->message_type = (tmessage_t)ntohl((int32_t)msg->message_type);
+  msg->arg1 = ntohl(msg->arg1);
+  msg->arg2 = ntohl(msg->arg2);
+  msg->arg3 = ntohl(msg->arg3);
+  msg->arg4 = ntohl(msg->arg4);
+  msg->arg5 = ntohl(msg->arg5);
+  msg->arg6 = ntohl(msg->arg6);
+  return msg;
+}
+
+void encode_message(tmessage &msg) {
+  msg.message_type = (tmessage_t)htonl((int32_t)msg.message_type);
+  msg.arg1 = htonl(msg.arg1);
+  msg.arg2 = htonl(msg.arg2);
+  msg.arg3 = htonl(msg.arg3);
+  msg.arg4 = htonl(msg.arg4);
+  msg.arg5 = htonl(msg.arg5);
+  msg.arg6 = htonl(msg.arg6);
 }

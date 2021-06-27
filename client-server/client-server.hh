@@ -8,6 +8,7 @@
 #include <vector>
 using namespace std;
 
+#define CMD_LEADERBOARDS regex("!leaderboards")
 #define CMD_LEADERBOARD regex("!leaderboard")
 #define CMD_LEADERBOARD_FULL regex("!leaderboard [0-3]")
 #define CMD_PLAYERS regex("!players")
@@ -35,5 +36,7 @@ void send_chat(string);
 void buffer_message(string);
 void send_messages(int sockfd, WINDOW *win);
 tmessage parse_message(string);
+tmessage *decode_message(tmessage *);
+void encode_message(tmessage &);
 
 #endif // CLIENT_H_

@@ -55,4 +55,7 @@ void broadcast_state(
     std::vector<std::pair<int, struct sockaddr_in>>); /**< Broadcast the local
                                         state to peers and to server*/
 
+void encode_state(update_msg &);
+void decode_state(update_msg *);
+
 #endif // CLIENT_H_
