@@ -25,16 +25,12 @@ using namespace std;
 #define CMD_CHILL regex("!chill")
 #define CMD_GO regex("!go")
 #define CMD_GO_FULL regex("!go \\d*")
+#define CMD_GAMESTATS regex("!gamestats")
 
 static vector<string> chat_messages;
 static mutex message_lock;
 
 int establish_connection(char *hostname, char *port);
-void consume_chat(int);
-void display_chat(WINDOW *win);
-void send_chat(string);
-void buffer_message(string);
-void send_messages(int sockfd, WINDOW *win);
 tmessage parse_message(string);
 tmessage *decode_message(tmessage *);
 void encode_message(tmessage &);

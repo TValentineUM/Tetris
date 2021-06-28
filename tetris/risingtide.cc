@@ -31,6 +31,7 @@ void RisingTide::run() {
             std::ref(game_ended));
 
   bool piece_flag = true;
+  int total_lines = 0;
   int counter = 0;
   tetromino new_piece;
 

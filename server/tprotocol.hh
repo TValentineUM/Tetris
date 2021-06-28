@@ -19,6 +19,7 @@ enum tmessage_t : int32_t {
   BATTLE,
   QUICKPLAY,
   CHILL,
+  GAMESTATS,
   GO,
   IGNORE,
   SCORE_UPDATE,

@@ -284,10 +284,10 @@ void handle_message(tmessage *msg, int sock) {
       } else {
         send_chat(sock, "You were not invited to the game in question");
       }
-      game_list_mutex.unlock();
     } else {
       send_chat(sock, "The game you requested to join does not exist!");
     }
+    game_list_mutex.unlock();
     break;
   }
   case IGNORE: {
@@ -458,6 +458,19 @@ void handle_message(tmessage *msg, int sock) {
     }
 
   } break;
+  case GAMESTATS: {
+    if (ongoing_games.size()) {
+      for (auto &[k, v] : ongoing_games) {
+        vector<string> messages = v.get_info();
+        string title = "Game: " + to_string(k);
+        messages.insert(messages.begin(), title);
+        send_multiple(sock, v.get_info());
+      }
+    } else {
+      send_chat(sock, "No games in progress");
+    }
+
+  } break;
   default:
     cout << "Another Message Type: " << msg->message_type << endl;
     cout << msg->buffer << endl;
@@ -508,9 +521,9 @@ vector<string> get_leaderboard(int game) {
 
   auto scores_out = [formatted_out, &scores](string name, int score,
                                              tuple<int, int> stats) {
-    scores.push_back(formatted_out(name, to_string(score),
-                                   to_string(get<0>(stats)),
-                                   to_string(get<1>(stats))));
+    scores.push_back(formatted_out(
+        name, to_string(score), to_string(get<0>(stats)),
+        to_string(get<1>(stats) - get<0>(stats)))); // Need to calculate losses
   };
 
   for (auto iter = plist.begin();
@@ -651,37 +664,67 @@ void handle_game(int game_id) {
                                  player->second.games.end());
     }
   }
-  if (ips.size() < 2) {
-    // Could send a message here
-    return;
-  }
 
-  random_device rd;
-  tmessage msg;
-  msg.message_type = INIT_GAME;
-  msg.arg2 = match.gamemode;
-  msg.arg3 = game_id;
-  msg.arg4 = match.arg1;
-  msg.arg5 = match.arg2;
-  msg.arg6 = rd(); // Game Seed
-  vector<int> socket_ids;
-  int player_no;
-  for (auto ip : ips) {
-    string temp;
-    for (auto peer : ips) {
-      if (peer != ip) {
-        temp += get<1>(peer) + " ";
+  if (ips.size() < 2) {
+    stringstream ss;
+    ss << "Invitation to game: " << game_id << " expired!";
+    for (auto &[k, v] : match.players) {
+      send_chat(k, ss.str());
+    }
+    return;
+  } else {
+
+    player_list_mutex.lock();
+
+    for (auto &[k, v] : match.players) {
+      auto player = player_list.find(k);
+      if (player != player_list.end()) {
+        switch (match.gamemode) {
+        case FAST_TRACK:
+          get<1>(player->second.fasttrack_games) += 1;
+          break;
+        case BOOMER:
+          get<1>(player->second.boomer_games) += 1;
+          break;
+        case RISING_TIDE:
+          get<1>(player->second.boomer_games) += 1;
+          break;
+        default:
+          break;
+        }
       }
     }
-    msg.arg1 = player_no++;
-    temp += get<1>(ip);
-    strcpy(msg.buffer, temp.c_str());
-    send_message(msg, get<0>(ip));
-    // send(get<0>(ip), (char *)&msg, sizeof(tmessage), 0);
-    socket_ids.push_back(get<0>(ip));
+
+    player_list_mutex.unlock();
+
+    random_device rd;
+    tmessage msg;
+    msg.message_type = INIT_GAME;
+    msg.arg2 = match.gamemode;
+    msg.arg3 = game_id;
+    msg.arg4 = match.arg1;
+    msg.arg5 = match.arg2;
+    msg.arg6 = rd(); // Game Seeda
+
+    vector<int> socket_ids;
+    int player_no;
+    for (auto ip : ips) {
+      string temp;
+      for (auto peer : ips) {
+        if (peer != ip) {
+          temp += get<1>(peer) + " ";
+        }
+      }
+      msg.arg1 = player_no++;
+      temp += get<1>(ip);
+      strcpy(msg.buffer, temp.c_str());
+      send_message(msg, get<0>(ip));
+      socket_ids.push_back(get<0>(ip));
+    }
+    active_game new_game(match.gamemode, socket_ids, match.arg2);
+    relay("Game started with id: " + to_string(game_id));
+    ongoing_games.insert({game_id, new_game});
   }
-  active_game new_game(match.gamemode, socket_ids, match.arg2);
-  ongoing_games.insert({game_id, new_game});
 }
 
 active_game::active_game(int gamemode, vector<int> players, int arg2)
@@ -726,7 +769,7 @@ void active_game::check_winner() {
                                   pair<int, game_data> &p2) -> bool {
     switch (game_mode) {
     case RISING_TIDE:
-      return get<1>(p1).duration >
+      return get<1>(p1).duration <
              get<1>(p2).duration; // Has to be reversed for max element
     case BOOMER:
       return get<1>(p1).score < get<1>(p2).score;
@@ -737,7 +780,7 @@ void active_game::check_winner() {
         return get<1>(p1).lines < get<1>(p2).lines;
       } else {
         if (get<1>(p1).lines >= lines && get<1>(p2).lines >= lines) {
-          return get<1>(p1).duration < get<1>(p2).duration;
+          return get<1>(p1).duration > get<1>(p2).duration;
         } else {
           return get<1>(p1).lines < get<1>(p2).lines;
         }
@@ -749,15 +792,62 @@ void active_game::check_winner() {
     }
   };
 
+  // iterators thread stuff idk
+  player_list_mutex.lock();
+  for (auto &[k, v] : players) {
+    auto player = player_list.find(k);
+    if (player != player_list.end()) {
+      switch (gamemode) {
+      case FAST_TRACK:
+        player->second.fasttrack = (player->second.fasttrack > v.score)
+                                       ? player->second.fasttrack
+                                       : v.score;
+        break;
+      case BOOMER:
+        player->second.boomer =
+            (player->second.boomer > v.score) ? player->second.boomer : v.score;
+        break;
+      case RISING_TIDE:
+        player->second.rising =
+            (player->second.rising > v.score) ? player->second.rising : v.score;
+        break;
+      default:
+        break;
+      }
+    }
+  }
+
   auto winner = max_element(players.begin(), players.end(), order);
   // This is so not good BUG
-  string str = player_list.find(get<0>(*winner))->second.name;
+  auto winning_player = player_list.find(get<0>(*winner));
+  if (winning_player != player_list.end()) {
+    switch (gamemode) {
+    case FAST_TRACK:
+      get<0>(winning_player->second.fasttrack_games) += 1;
+      break;
+    case BOOMER:
+      get<0>(winning_player->second.boomer_games) += 1;
+      break;
+    case RISING_TIDE:
+      get<0>(winning_player->second.boomer_games) += 1;
+      break;
+    default:
+      break;
+    }
 
-  str += " won the game, score: " + to_string(get<1>(*winner).score) +
-         ", lines:" + to_string(get<1>(*winner).lines);
+    string str = winning_player->second.name;
+    player_list_mutex.unlock();
+    str += " won the game, score: " + to_string(get<1>(*winner).score) +
+           ", lines:" + to_string(get<1>(*winner).lines);
 
-  for (auto &[k, v] : state) {
-    send_chat(k, str);
+    for (auto &[k, v] : state) {
+      send_chat(k, str);
+    }
+  } else {
+    player_list_mutex.unlock();
+    for (auto &[k, v] : state) {
+      send_chat(k, "unable to determine the winner");
+    }
   }
 }
 
@@ -765,4 +855,22 @@ void active_game::update_player(int player_no, int score, int lines) {
   auto player = state.find(player_no);
   get<0>(player->second).score = score;
   get<0>(player->second).lines = lines;
+}
+
+vector<string> active_game::get_info() {
+  vector<string> info;
+  auto formatted_out = [](int p1, int p2, int p3) {
+    stringstream ss;
+    ss << left << setw(NAMESIZE + 4) << setfill(' ')
+       << "Player: " + to_string(p1);
+    ss << left << setw(NAMESIZE + 4) << setfill(' ')
+       << "Score: " + to_string(p2);
+    ss << left << setw(NAMESIZE + 4) << setfill(' ')
+       << "Lines: " + to_string(p3);
+    return ss.str();
+  };
+  for (auto &[k, v] : state) {
+    info.push_back(formatted_out(k, get<0>(v).score, get<0>(v).lines));
+  }
+  return info;
 }

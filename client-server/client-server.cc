@@ -196,8 +196,10 @@ tmessage parse_message(string str) {
       } else {
         throw invalid_argument("GO needs a number");
       }
-    } else if (regex_match(command, CMD_LEADERBOARDS)) {
+    } else if (regex_match(str, CMD_LEADERBOARDS)) {
       msg.message_type = (tmessage_t)htonl((int32_t)LEADERBOARDS);
+    } else if (regex_match(str, CMD_GAMESTATS)) {
+      msg.message_type = (tmessage_t)htonl((int32_t)GAMESTATS);
     } else {
       throw invalid_argument("Unable to parse command");
     }

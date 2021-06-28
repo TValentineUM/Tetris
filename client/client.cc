@@ -147,7 +147,6 @@ void recieve_message(int sockfd) {
     }
     break;
   }
-
   default:
     break;
   }

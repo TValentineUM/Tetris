@@ -34,10 +34,10 @@ public:
   int rising = 0;                   /**< Highscore for Rising Games*/
   int boomer = 0;                   /**< Highscore for Boomer Games*/
   int fasttrack = 0;                /**< Highscore for fasttrack games*/
-  std::pair<int, int> rising_games; /**< Win/Loss Number for Rising Games*/
-  std::pair<int, int> boomer_games; /**< Win/Loss Number for Boomer Games*/
+  std::pair<int, int> rising_games; /**< Win/Plays Number for Rising Games*/
+  std::pair<int, int> boomer_games; /**< Win/Plays Number for Boomer Games*/
   std::pair<int, int>
-      fasttrack_games; /**< Win/Loss Number for FastTrack Games*/
+      fasttrack_games; /**< Win/Plays Number for FastTrack Games*/
   std::vector<int> games;
   struct sockaddr_in address; /**< Connection Details for Client*/
 };
@@ -71,6 +71,7 @@ public:
   void check_winner();
   void finished_player(int, int, int);
   void update_player(int, int, int);
+  std::vector<std::string> get_info();
 };
 
 static std::mutex cout_mutex;
