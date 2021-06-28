@@ -19,6 +19,12 @@ TetrisGame::TetrisGame(int seed, vector<pair<string, string>> ips,
   state.game_no = game_no;
 }
 
+TetrisGame::TetrisGame(int seed)
+    : playing_field{vector<vector<char>>(ROWS, vector<char>(COLUMNS, 0))},
+      next_piece{tetrominos[seed % 7]}, distrib{uniform_int_distribution<>(0,
+                                                                           6)},
+      rng{mt19937(seed)}, score{0}, lines_cleared{0}, seed{seed} {}
+
 bool TetrisGame::piece_fits(tetromino t) {
   auto x_offset = t.x;
   auto y_offset = t.y;
@@ -305,19 +311,19 @@ int TetrisGame::do_gametick(tetromino &new_piece, bool &piece_flag,
 void TetrisGame::run() {
 
   game_setup();
-  bool game_ended = false;
-  thread t1(communicate_state, server_socket, std::ref(state), ips,
-            std::ref(game_ended));
+  // bool game_ended = false;
+  // thread t1(communicate_state, server_socket, std::ref(state), ips,
+  //           std::ref(game_ended));
   bool piece_flag = true;
   int counter = 0;
   tetromino new_piece;
   while (do_gametick(new_piece, piece_flag, counter) == 0) {
   }
-  game_ended = true;
-  t1.join();
+  // game_ended = true;
+  // t1.join();
   clear();
   endwin();
-  cout << "game ended" << endl;
+  // cout << "game ended" << endl;
 }
 
 gamestate &TetrisGame::get_final_score() { return std::ref(state); }

@@ -13,13 +13,16 @@
 using namespace std;
 
 vector<pair<string, string>> decode_hostnames(string str) {
-  stringstream ss(str);
-  string temp;
+
   vector<pair<string, string>> hostnames;
-  while (ss >> temp) {
-    string ip = temp.substr(0, temp.find(':'));
-    string port = temp.substr(temp.find(':') + 1, temp.size());
-    hostnames.push_back({ip, port});
+  if (str.size() != 0) {
+    stringstream ss(str);
+    string temp;
+    while (ss >> temp) {
+      string ip = temp.substr(0, temp.find(':'));
+      string port = temp.substr(temp.find(':') + 1, temp.size());
+      hostnames.push_back({ip, port});
+    }
   }
   return hostnames;
 }

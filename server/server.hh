@@ -92,6 +92,9 @@ static std::mutex game_list_mutex;
 static std::map<uint32_t, active_game> ongoing_games;
 static std::mutex ongoing_game_mutex;
 
+static std::map<uint32_t, game_data> chill_games;
+static std::mutex chill_games_mutex;
+
 void relay(std::string);     /**< Send the message to all clients connected*/
 void handle_connection(int); /**< Handles individual clients on a new thread*/
 std::string random_string(size_t length); /**< Creates random strings */

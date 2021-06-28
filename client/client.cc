@@ -103,6 +103,7 @@ void recieve_message(int sockfd) {
   }
   case INIT_GAME: {
     erase();
+
     auto ips = decode_hostnames(string(msg->buffer));
     gamestate score;
     switch (msg->arg2) {
@@ -122,6 +123,11 @@ void recieve_message(int sockfd) {
       game.run();
       score = game.get_final_score();
     } break;
+    case CHILLER: {
+      TetrisGame game(msg->arg6);
+      game.run();
+      score = game.get_final_score();
+    }
     default:
       break;
     }

@@ -312,13 +312,20 @@ void handle_message(tmessage *msg, int sock) {
     int game_number = msg->arg1;
     int score = msg->arg2;
     int lines = msg->arg3;
-    auto game = ongoing_games.find(game_number);
-    if (game != ongoing_games.end()) {
-      // game->second.check_winner();
+    if (ongoing_games.find(game_number) != ongoing_games.end()) {
+      auto game = ongoing_games.find(game_number);
       game->second.finished_player(sock, score, lines);
-    } else {
-      cerr << "Unable to find ongoing game: " << game_number << endl;
+    } else if (chill_games.find(game_number) != chill_games.end()) {
+      auto game = chill_games.find(game_number);
+      player_list_mutex.lock();
+      auto player = player_list.find(sock);
+      // Update high score
+      player->second.chill =
+          player->second.chill > score ? player->second.chill : score;
+      player_list_mutex.unlock();
+      // erase-remove idiom
     }
+
     player_list_mutex.lock();
     auto player = player_list.find(sock);
     // erase-remove idiom
@@ -331,13 +338,13 @@ void handle_message(tmessage *msg, int sock) {
     int game_number = msg->arg1;
     int score = msg->arg2;
     int lines = msg->arg3;
-    auto game = ongoing_games.find(game_number);
-    if (game != ongoing_games.end()) {
+    if (ongoing_games.find(game_number) != ongoing_games.end()) {
+      auto game = ongoing_games.find(game_number);
       game->second.update_player(sock, score, lines);
-      // cout_mutex.lock();
-      // cout << "Score Update; Game ID: " << game_number << " Score: " << score
-      //      << " Lines: " << lines << endl;
-      // cout_mutex.unlock();
+    } else if (chill_games.find(game_number) != chill_games.end()) {
+      auto game = chill_games.find(game_number);
+      game->second.score = score;
+      game->second.lines = lines;
     }
     break;
   }
@@ -470,6 +477,24 @@ void handle_message(tmessage *msg, int sock) {
       send_chat(sock, "No games in progress");
     }
 
+  } break;
+  case CHILL: {
+    game_data new_game;
+    int game_number = game_counter++;
+    chill_games_mutex.lock();
+    chill_games.insert({game_number, new_game});
+    chill_games_mutex.unlock();
+    tmessage msg;
+    msg.message_type = INIT_GAME;
+    msg.arg2 = CHILLER;
+    msg.arg3 = game_number;
+    random_device rd;
+    msg.arg6 = rd();
+    player_list_mutex.lock();
+    auto player = player_list.find(sock);
+    player->second.games.push_back(game_number);
+    player_list_mutex.unlock();
+    send_message(msg, sock); // sending start game command
   } break;
   default:
     cout << "Another Message Type: " << msg->message_type << endl;

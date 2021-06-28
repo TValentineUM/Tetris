@@ -185,7 +185,7 @@ tmessage parse_message(string str) {
       }
     } else if (regex_match(command, CMD_CHILL)) {
       msg.message_type = (tmessage_t)htonl((int32_t)CHILL);
-      if (!regex_match(str, CMD_QUICK)) {
+      if (!regex_match(str, CMD_CHILL)) {
         throw invalid_argument("Chill does not expect arguments");
       }
     } else if (regex_match(command, CMD_GO)) {
