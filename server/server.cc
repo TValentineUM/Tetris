@@ -171,14 +171,18 @@ void handle_message(tmessage *msg, int sock) {
   }
   case NICKNAME: {
 
+    string str;
+    str = "Updated Nickname to: " + string(msg->buffer);
+    // If an error is encountred str will be updated to the error message
+
     player_list_mutex.lock();
+
     auto iter = player_list.find(sock);
     if (iter != player_list.end()) {
       strcpy(iter->second.name, msg->buffer);
     }
     player_list_mutex.unlock();
-    string str;
-    str = "Updated Nickname to: " + string(msg->buffer);
+
     send_chat(sock, str);
     break;
   }
@@ -223,6 +227,10 @@ void handle_message(tmessage *msg, int sock) {
       players.push_back(temp);
     }
     auto player_sockets = get_socket_from_playername(players);
+    if (player_sockets.size() == 0) {
+      send_chat(sock, "No requested players were found");
+      break;
+    }
     player_sockets.push_back(sock);
     for (auto c : player_sockets) {
       // Will insert true for the initiator, false for everyone else
@@ -273,6 +281,7 @@ void handle_message(tmessage *msg, int sock) {
     break;
   }
   case GO: {
+    string str;
     game_list_mutex.lock();
     auto g = game_list.find(msg->arg1);
     if (g != game_list.end()) {
@@ -280,14 +289,15 @@ void handle_message(tmessage *msg, int sock) {
           g->second.players.find(sock); // Checking if we are part of the game
       if (entry != g->second.players.end()) {
         entry->second = true;
-        send_chat(sock, "You sucessfully accepted to join the game");
+        str = "You sucessfully accepted to join the game";
       } else {
-        send_chat(sock, "You were not invited to the game in question");
+        str = "You were not invited to the game in question";
       }
     } else {
-      send_chat(sock, "The game you requested to join does not exist!");
+      str = "The game you requested to join does not exist!";
     }
     game_list_mutex.unlock();
+    send_chat(sock, str); // Sending outside of critial section
     break;
   }
   case IGNORE: {
@@ -349,17 +359,16 @@ void handle_message(tmessage *msg, int sock) {
     break;
   }
   case QUICKPLAY: {
+
     std::random_device rd;
     std::mt19937 gen(rd());
     std::uniform_int_distribution<> game_distribution(0, 2); // Valid Gamemodes
-    std::uniform_int_distribution<> invite_distribution(0,
-                                                        player_list.size() - 1);
     game new_game;
     int gamemode = game_distribution(gen);
     new_game.gamemode = gamemode;
     switch (gamemode) {
     case BOOMER: {
-      std::uniform_int_distribution<> time_distribution(0,
+      std::uniform_int_distribution<> time_distribution(30,
                                                         300); // Valid Gamemodes
       new_game.arg1 = time_distribution(gen);
 
@@ -374,14 +383,22 @@ void handle_message(tmessage *msg, int sock) {
       break;
     }
 
-    // weve generated the game params, now we need the players
+    vector<int> offsets;
+    player_list_mutex.lock();
+    std::uniform_int_distribution<> invite_distribution(
+        0, player_list.size() -
+               1); // Used to generate offsets from the starting iterator
     while (new_game.players.size() < msg->arg1) {
       auto iter = player_list.begin();
       advance(iter, invite_distribution(gen)); // Get a random player
-      if (iter->first != sock) {
+      // Preventing the game creator being added, and preventing a player from
+      // having multiple invites
+      if (iter->first != sock && new_game.players.count(iter->first) == 0) {
         new_game.players.insert({iter->first, false});
       }
     }
+    player_list_mutex.unlock();
+
     new_game.players.insert({sock, true});
 
     // Creating Game
@@ -457,7 +474,7 @@ void handle_message(tmessage *msg, int sock) {
       scores_out("Boomer", v.boomer, v.boomer_games);
       scores_out("FastTrack", v.fasttrack, v.fasttrack_games);
       scores.push_back(
-          formatted_out("Chiller", to_string(v.chill), "N/AA", "N/A"));
+          formatted_out("Chiller", to_string(v.chill), "N/A", "N/A"));
       send_multiple(sock, scores);
       scores.clear();
       this_thread::sleep_for(

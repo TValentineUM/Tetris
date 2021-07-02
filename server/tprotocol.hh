@@ -36,9 +36,11 @@ enum tmessage_t : int32_t {
  * side.
  */
 struct tmessage {
-  tmessage_t message_type;
-  int32_t arg1, arg2, arg3, arg4, arg5, arg6;
-  char buffer[MESSAGE_LENGTH];
+  tmessage_t message_type; /**< Enumeration denoting the type of the message*/
+  int32_t arg1, arg2, arg3, arg4, arg5,
+      arg6;                    /**< Optional argument sfor each message type*/
+  char buffer[MESSAGE_LENGTH]; /**< Char buffer for chat messages or information
+                                  to decode */
 
 } typedef tmessage;
 

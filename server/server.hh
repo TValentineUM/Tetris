@@ -99,7 +99,8 @@ void relay(std::string);     /**< Send the message to all clients connected*/
 void handle_connection(int); /**< Handles individual clients on a new thread*/
 std::string random_string(size_t length); /**< Creates random strings */
 void run_server(int);                     /**< Lanuches the server */
-void handle_message(tmessage *, int);
+void handle_message(
+    tmessage *, int); /**< Implements handler code for various message types*/
 void handle_game(int);
 void send_chat(int, std::string);
 void send_multiple(int, std::vector<std::string>);
