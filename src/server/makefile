@@ -5,7 +5,7 @@
 # @version 0.1
 
 CXX=clang++
-CXXFLAGS=-I -Wall -std=c++17 -g -pthread
+CXXFLAGS=-I -Wall -std=c++17 -g -pthread -fsanitize=address
 DEPS = server.hh tprotocol.hh
 OBJ = server.cc
 MAINOBJ = main.o $(OBJ)

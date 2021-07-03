@@ -33,34 +33,38 @@ void RisingTide::run() {
   bool piece_flag = true;
   int total_lines = 0;
   int counter = 0;
+  int old_lines = total_lines;
   tetromino new_piece;
 
   while (do_gametick(new_piece, piece_flag, counter) == 0) {
-    auto old_lines = total_lines;
-    total_lines = 0;
     new_lines = 0;
-    for (auto &[k, v] : state.players) {
-      total_lines += v.lines;
-    }
-    new_lines = total_lines - old_lines;
-    if (new_lines > 0) {
-      if (insert_lines() != 0) {
-        break;
-      } else {
-        for (int i = 0; i < new_lines; i++) {
-          if (piece_fits(new_piece)) {
-            break;
-          } else {
-            new_piece.y--;
+    if (state.players.size()) {
+      old_lines = total_lines;
+      total_lines = 0;
+      for (auto &[k, v] : state.players) {
+        total_lines += v.lines;
+      }
+      new_lines = total_lines - old_lines;
+      // total_lines = total_lines - old_lines;
+      // old_lines = total_lines;
+      if (new_lines > 0) {
+        if (insert_lines() != 0) {
+          break;
+        } else {
+          for (int i = 0; i < new_lines; i++) {
+            if (piece_fits(new_piece)) {
+              break;
+            } else {
+              new_piece.y--;
+            }
           }
         }
+        new_lines = 0;
       }
-      new_lines = 0;
     }
   }
   game_ended = true;
   t1.join();
   clear();
   endwin();
-  cout << "game ended" << endl;
 }

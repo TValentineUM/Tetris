@@ -29,5 +29,4 @@ void BoomerGame::run() {
   t1.join();
   clear();
   endwin();
-  cout << "game ended" << endl;
 }

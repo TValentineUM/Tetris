@@ -26,6 +26,8 @@ using namespace std;
 #define CMD_GO regex("!go")
 #define CMD_GO_FULL regex("!go \\d*")
 #define CMD_GAMESTATS regex("!gamestats")
+#define CMD_IGNORE regex("!ignore")
+#define CMD_IGNORE_FULL regex("!ignore \\d*")
 
 static vector<string> chat_messages;
 static mutex message_lock;

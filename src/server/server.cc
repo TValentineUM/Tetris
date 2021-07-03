@@ -219,7 +219,6 @@ void handle_message(tmessage *msg, int sock) {
     new_game.gamemode = msg->arg1; // Setting the gamemode
     new_game.arg1 = msg->arg2;
     new_game.arg2 = msg->arg3;
-    cout << "Names: " << msg->buffer << endl;
     vector<string> players;
     string temp;
     stringstream ss(msg->buffer);
@@ -322,10 +321,14 @@ void handle_message(tmessage *msg, int sock) {
     int game_number = msg->arg1;
     int score = msg->arg2;
     int lines = msg->arg3;
+    ongoing_game_mutex.lock();
     if (ongoing_games.find(game_number) != ongoing_games.end()) {
       auto game = ongoing_games.find(game_number);
       game->second.finished_player(sock, score, lines);
-    } else if (chill_games.find(game_number) != chill_games.end()) {
+    }
+    ongoing_game_mutex.unlock();
+    chill_games_mutex.lock();
+    if (chill_games.find(game_number) != chill_games.end()) {
       auto game = chill_games.find(game_number);
       player_list_mutex.lock();
       auto player = player_list.find(sock);
@@ -335,6 +338,7 @@ void handle_message(tmessage *msg, int sock) {
       player_list_mutex.unlock();
       // erase-remove idiom
     }
+    chill_games_mutex.unlock();
 
     player_list_mutex.lock();
     auto player = player_list.find(sock);
@@ -374,7 +378,7 @@ void handle_message(tmessage *msg, int sock) {
 
     } break;
     case FAST_TRACK: {
-      std::uniform_int_distribution<> line_distribution(0,
+      std::uniform_int_distribution<> line_distribution(2,
                                                         10); // Valid Gamemodes
       new_game.arg1 = line_distribution(gen);
       new_game.arg2 = line_distribution(gen);
@@ -463,7 +467,7 @@ void handle_message(tmessage *msg, int sock) {
                                                tuple<int, int> stats) {
       scores.push_back(formatted_out(name, to_string(score),
                                      to_string(get<0>(stats)),
-                                     to_string(get<1>(stats))));
+                                     to_string(get<1>(stats) - get<0>(stats))));
     };
 
     for (auto &[k, v] : local_plist) {
@@ -729,7 +733,7 @@ void handle_game(int game_id) {
           get<1>(player->second.boomer_games) += 1;
           break;
         case RISING_TIDE:
-          get<1>(player->second.boomer_games) += 1;
+          get<1>(player->second.rising_games) += 1;
           break;
         default:
           break;
@@ -871,7 +875,7 @@ void active_game::check_winner() {
       get<0>(winning_player->second.boomer_games) += 1;
       break;
     case RISING_TIDE:
-      get<0>(winning_player->second.boomer_games) += 1;
+      get<0>(winning_player->second.rising_games) += 1;
       break;
     default:
       break;

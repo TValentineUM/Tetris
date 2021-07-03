@@ -361,7 +361,68 @@ This functionality is wrapped inside a lambda function so that the player can be
 
 ## Client-Server
 
+
+\newpage
 ## Client-Client
+
+Peer to peer connectivity is implemented in the `src/p2p` directory.
+
+The main component of the library is the `communicate_state` function. The function is designed to take a `gamestate` struct which contains the information used during a game. This struct is passed by reference to the function by the tetris games to ensure that the information can be read properly. The function is designed to establish the necessary sockets to send or recieve state from peers during the game. Once the sockets have been established then `receive_state` and `broadcast_state` are called.
+
+`recieve_state` is used to retrieve game updates from peers, and update the `gamestate` with the new information. Since peer information is only updated by the `recieve_state` function and tetris games will only be reading the information contained, mutual exclusion was not required during reads or writes.
+
+```{.cpp .numberLines}
+update_msg *msg = (update_msg *)buffer;
+decode_state(msg); // Network to host
+if (state.players.find(msg->player_no) != state.players.end()) {
+    auto player = state.players.find(msg->player_no);
+    player->second.score = msg->score;
+    player->second.lines = msg->lines;
+} else {
+    // First update, add player to list
+    state.players.insert({msg->player_no, (playstate){.score = 0, .lines = 0}});
+  }
+}
+
+```
+
+`broadcast_state` is used to send the current `gamestate` information to all peers every 25 milliseconds, and to the server every one second. The information is sent in the form of an `update_msg` struct to peers and a `tmessage` to the server. To increase the frequency of updates a `TICKRATE` macro is defined in the headerfile, this alters the number of updates to peers per second.
+
+```{.cpp}
+ while (1) {
+    if (*termination_flag) {
+      break;
+    }
+    counter = (counter + 1) % TICKRATE;
+    struct update_msg msg;
+    msg.score = state.local.score;
+    msg.lines = state.local.lines;
+    msg.player_no = state.player_no;
+    encode_state(msg);
+    for (auto &[sock, other] : peers) {
+      int num_bytes;
+      if (sendto(sock, (char *)&msg, sizeof(update_msg), 0,
+                 (struct sockaddr *)&other, sizeof(other)) == -1) {
+        close(sock);
+        perror("sendto()");
+        return;
+      }
+    }
+    if (counter == 0) {
+      tmessage server_msg;
+      server_msg.message_type = (tmessage_t)htonl((int32_t)SCORE_UPDATE);
+      server_msg.arg1 = htonl(state.game_no);
+      server_msg.arg2 = htonl(state.local.score);
+      server_msg.arg3 = htonl(state.local.lines);
+      send(sock_fd, (char *)&server_msg, sizeof(server_msg), 0);
+    }
+
+    this_thread::sleep_for(
+        TICKDURATION);  
+}
+```
+
+Terminating threads safely in c++ is slightly more cumbersome than with native POSIX threads. To work around this problem a `termination_flag` is used to tell the threads if they need to terminate, the flag is set by tetris games when the player loses or wins their match. This ensures that all threads are cleaned up properly and the cleanup code is self contained within the function.
 
 \newpage
 
@@ -369,18 +430,163 @@ This functionality is wrapped inside a lambda function so that the player can be
 
 The client front-end consists of two distinct components, the chat client used to send and display messages, and the individual games implemented with being implemented using `ncurses`. 
 
-## Chat Lobby
+On startup the client uses the `establish_connection` command to open a TCP socket with the server. The arguments to the command are the servers hostname, as well as the port, both of which should be passed by the command line.
 
-The chat lobby used by the client impleme
+The client will then enter a loop where the socket file descriptor and standard input are polled using the `poll` system call. If standard input is ready then the `send_message` function is used to take the input, wrap it in a `tmessage` struct and send it to the server. If data is ready to be received from the server then `recieve_message` is used to get the message from the server and handle it. The possible messages from the server are either chat messages, or start game messages.
+
+```{.cpp .numberLines}
+ struct pollfd pfds[2];
+pfds[0].fd = 0; // STDIN
+pfds[0].events = POLLIN;
+
+pfds[1].fd = sockfd;
+pfds[1].events = POLLIN;
+
+int xMax, yMax;
+getmaxyx(stdscr, yMax, xMax);
+
+for (;;) {
+  move(yMax - 4, 1);
+  int poll_count = poll(pfds, 2, -1); // Wait till we have input
+
+  if (poll_count == -1) {
+    exit(1);
+  } else {
+    for (int i = 0; i < 2; i++) {
+      if (pfds[i].revents & POLLIN) {
+        if (pfds[i].fd == 0) {
+          // Standard Input is ready
+          send_message(sockfd);
+        } else if (pfds[i].fd == sockfd) {
+          // Data to receive from the client
+          recieve_message(sockfd);
+        }
+      }
+    }
+  }
+}
+```
+
+
+## Handling Messages
+
+As mentioned previously `recieve_message` is used to handle incoming messages from the client. The received messages are handled according to their `message_type` parameter.
+
+### Chat Messages
+
+Chat messages are handled by extracting the `buffer` field from the received message, and appending it to a limited buffer. The limited buffer is used to store the $n$ most recent messages to emulate text scrolling on the display. 
+
+```{.cpp .numberLines}
+case CHAT: {
+    chat_messages.push_back(string(msg->buffer));
+    
+    wclear(chat_window);
+    box(chat_window, 0, 0);
+    
+    if (chat_messages.size() > (yMax - 12)) { // yMax is the maximum buffer size based on the screen
+      chat_messages.erase(chat_messages.begin(), chat_messages.begin() + (chat_messages.size() - (yMax - 12))); // Remove the old messages
+    }
+    // Display the messages
+    for (int i = 0; i < chat_messages.size(); i++) {
+      mvwprintw(chat_window, i + 1, 1, chat_messages[i].c_str());
+      wrefresh(chat_window);
+    }
+    break;
+  }
+```
+
+### Game Messages
+
+Games starts are triggered by recieving `INIT_GAME` messages from the server. The message structure contains all the information to start the game;
+
+1. Player number
+2. Gamemode
+3. Game id
+4. Gamemode Argument 1
+5. Gamemode Argument 2
+6. Game seed
+
+The arguments are then passed to the constructors for the tetris games, before allowing the game to run and getting the final score.
+
+```{.cpp .numberLines}
+switch (msg->arg2) {
+  case BOOMER: {
+    BoomerGame game(msg->arg6, ips, msg->arg1, msg->arg3, sockfd, msg->arg4);
+    game.run();
+    score = game.get_final_score();
+  } break;
+
+```
+
+The score is needed to send a final `GAME_END` message to the server before returning to the chat client.
+
 
 \newpage
 
 ## Games
 
-The tetris game implementation code is located in the `src/tetris` directory. The base `TetrisGame` class is used to implement a basic tetris game with piece lookahead and scoring.
+The tetris game implementation code is located in the `src/tetris` directory. The base `TetrisGame` class is used to implement a basic tetris game with the code for piece generation, rotation, collision, scoring, line clearing etc.
+
+This gamemode also acts as the implementation for the singleplayer CHILL gamemode.
+
+### Boomer
+
+The Boomer gamemode was intended to end the game after a specified duration. To implement this functionality the current time elapsed is checked after each gametick, meaning that the game will terminate with a maximum delay of 25 milliseconds.
+
+```{.cpp .numberLines}
+auto start = chrono::high_resolution_clock::now();
+auto current = chrono::high_resolution_clock::now();
+auto time_elapsed =
+    chrono::duration_cast<chrono::milliseconds>(current - start);
+while (do_gametick(new_piece, piece_flag, counter) == 0 &&
+        time_elapsed < game_duration) {
+  current = chrono::high_resolution_clock::now();
+  time_elapsed = chrono::duration_cast<chrono::milliseconds>(current - start);
+}
+```
 
 
+### Rising Tide
+
+Rising tide requires that all lines completed by other players are transferred to your own board.
+
+This functionality was implemented by keeping track of the total number of lines completed at each game tick, if on the new gametick more lines have been completed, then the lines are added to the players board. The `insert_lines` function was also implemented to handle the logic of inserting lines and managing the pieces.
 
 
+```{.cpp .numberLines}
+while (do_gametick(new_piece, piece_flag, counter) == 0) {
+    new_lines = 0;
+    if (state.players.size()) { // Only checking lines if there are lines to check
+      old_lines = total_lines; // Noting the previous number of lines completed
+      total_lines = 0;
+      for (auto &[k, v] : state.players) {
+        total_lines += v.lines; // Calculating the total number of lines completed
+      }
+      new_lines = total_lines - old_lines; // Calculating the new lines completed
+      if (new_lines > 0) {
+        if (insert_lines() != 0) { // Inserting the lines
+        /*
+        * Cleanup current piece
+        */
+```
 
 
+### Fast Track
+
+The fast track gamemode the playing field is initially populated with a number of rows and the game ends when the player completed a stipulated number of lines or loses.
+
+Filling the board was a trivial implementation and involved setting all the columns in the specified rows to an unclearable number.
+
+```{.cpp .numberLines}
+for (int i = playing_field.size() - 1; i >= playing_field.size() - init_lines; i--) {
+    playing_field[i] = vector<char>(playing_field[i].size() + 1, STATIC_ROW);
+}
+```
+
+Ensuring that the game ends after the stipulated number of lines involved checking the current number of completed lines against the needed amount.
+
+```{.cpp .numberLines}
+while (do_gametick(new_piece, piece_flag, counter) == 0 &&
+         lines_cleared < win_lines) {
+}
+```

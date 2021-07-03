@@ -311,19 +311,13 @@ int TetrisGame::do_gametick(tetromino &new_piece, bool &piece_flag,
 void TetrisGame::run() {
 
   game_setup();
-  // bool game_ended = false;
-  // thread t1(communicate_state, server_socket, std::ref(state), ips,
-  //           std::ref(game_ended));
   bool piece_flag = true;
   int counter = 0;
   tetromino new_piece;
   while (do_gametick(new_piece, piece_flag, counter) == 0) {
   }
-  // game_ended = true;
-  // t1.join();
   clear();
   endwin();
-  // cout << "game ended" << endl;
 }
 
 gamestate &TetrisGame::get_final_score() { return std::ref(state); }

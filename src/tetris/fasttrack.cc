@@ -9,7 +9,7 @@ void FastTrack::run() {
   game_setup();
   for (int i = playing_field.size() - 1; i >= playing_field.size() - init_lines;
        i--) {
-    playing_field[i] = vector<char>(playing_field[i].size() + 1, 8);
+    playing_field[i] = vector<char>(playing_field[i].size() + 1, STATIC_ROW);
   }
 
   bool game_ended = false;
@@ -28,5 +28,4 @@ void FastTrack::run() {
   t1.join();
   clear();
   endwin();
-  cout << "game ended" << endl;
 }
