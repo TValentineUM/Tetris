@@ -54,7 +54,7 @@ As mentioned previously connections are handled in a new thread running the `han
 
 Initially the function generates a new player name and creates a `player_data` class to store all the information needed for a client, this data is stored in a map (`player_list`) accessible to all threads. The thread will then enter an infinite loop trying to process data from the client. To reduce server overhead the socket file descriptor is monitored using the Linux `poll` system call, this allows the `recv` call to only be used when there is data to be received. 
 
-Upon sucessful return of the `poll` call, `recv` is used to get the data from the socket and the total number of bytes read are recorded. If zero bytes are read from the socket this is indicative of the client on the other end closing the socket, the thread will then enter a cleanup phase to remove all references to the client it's serving before terminating. Otherwise the server will decode the message from network byte ordering (`ntohl`) before calling `handle_message`.
+Upon successful return of the `poll` call, `recv` is used to get the data from the socket and the total number of bytes read are recorded. If zero bytes are read from the socket this is indicative of the client on the other end closing the socket, the thread will then enter a cleanup phase to remove all references to the client it's serving before terminating. Alternatively if the server reads the required amount of data then the message will be decoded from network byte ordering (`ntohl`) before calling `handle_message`.
 
 \begin{figure}
 \begin{verbatim}
@@ -81,7 +81,7 @@ struct tmessage {
 ```
 
 
-`tmessage_t` is especially important to the implementation as it allows the server to switch over handlers for the different message types and used in the implementation of `handle_message`.
+`tmessage_t` is especially important to the implementation as it allows the server to switch over handlers for the different message types decreasing the overall processing time.
 
 
 ### Chat Messages
@@ -104,7 +104,7 @@ case CHAT: {
 
 ### Nickname
 
-Nickname changing is implemented through changing the `name` field in the `player_data` class corresponding to the current user. Error messages are returned to the user in the form of chat messages if the new nickname is used by another player on the server or exceeds the maximum nickname length.
+Nickname changing is implemented through changing the `name` field in the `player_data` class corresponding to the current user. If the requested player name is already being used by another player, or the nickname is too long then an error message is sent to the client as a chat message.
 
 To solve the situation where two clients request the same nickname at the same time, the `player_list` has a corresponding mutex `player_list_mutex` which is used to lock the map during manipulation.
 
@@ -137,7 +137,7 @@ player_list_mutex.unlock();
 
 Another added benefit is that the leader-board shown will be at the time of the message request, not including any new games ending during processing. 
 
-Generating the leaderboard required sorting the `player_data` in descending order according to the specified gamemode, the implementation of which used the `<algorithm>` library is used in combination with a custom comparison function.  The top 3 entries for the gamemode are formatted into a string and placed in a `vector` which is returned at the end of the function. All of this functionality is wrapped inside the `get_leaderboard` function to increase re-usability.
+Generating the leaderboard required sorting the `player_data` in descending order according to the specified gamemode, the implementation of which used the `<algorithm>` library in combination with a custom comparison function. The top 3 entries for the gamemode are formatted into a string and placed in a `vector` which is returned at the end of the function. All of this functionality is wrapped inside the `get_leaderboard` function to increase re-usability.
 
 ```{.cpp .numberLines}
 auto sort_order = [game](player_data &p1, player_data &p2) -> bool {
@@ -161,9 +161,22 @@ sort(plist.begin(), plist.end(), sort_order);
 
 To ensure that the multiple messages which construct the leaderboard arrive uninterrupted the socket file descriptor for the client is locked using the `lockf` system call. Following this all messages can be sent to the client before unlocking the file descriptor. This locking and unlocking behaviour is implemented in all the sending commands from the server to ensure correctness.
 
+```{.cpp .numberLines}
+if (lockf(sock_fd, F_ULOCK, 0) < 0) {
+  perror("lockf");
+}
+if (send(sock_fd, (char *)&msg, sizeof(tmessage), 0) < 0) {
+  perror("send");
+};
+if (lockf(sock_fd, F_ULOCK, 0) < 0) {
+  perror("lockf");
+}
+```
+
+
 #### Leaderboards 
 
-The implementation for `!leaderboards` involved calling the `get_leaderboard` function for each gamemode and sending the messages to the client.
+The implementation for the `!leaderboards` command involved calling the `get_leaderboard` function for each gamemode and sending the messages to the client.
 
 ### Players
 
@@ -193,17 +206,17 @@ for (auto &[k, v] : local_plist) { // Iterating over local player list
 
 ### Battle
 
-Currently super battle tetris supports 4 gamemodes, of those 3 are supported in the battle command. Upon recieving a battle request the server must first decode the player names into the corresponding socket fds.
+Currently super battle tetris supports 4 gamemodes, of which 3 are supported in the battle command. Upon recieving a battle request the server must first decode the player names into the corresponding socket file descriptors.
 
-If all or some of the players are found then a `game` object can be created, otherwise an error message is sent to the user. The `game` object is used to store all the information required to host a game, including the gamemode, gamemode arguments, and playerlist. The playerlist is a mapping from socket fd to a boolean, where the boolean flags if a player has accepted or declined a match. 
+If all or some of the players are found then a `game` object can be created, otherwise an error message is sent to the user. The `game` object is used to store all the information required to host a game, including the gamemode, gamemode arguments, and playerlist. The playerlist is a mapping from the socket file descriptor to a boolean, where the boolean flags if a player has accepted or declined a match. 
 
-The new game is then added to the `game_list` map where the key is generated from an `atomic_uint32_t`, this guarantees that each pending game has a unique number with an upper limit of no more than $4 \times {10^9}$ games being pending at one time. Invited players are then messaged, and the game id is added to the `games` vector inside of their `player_data`. The need to store all invited games is to remove the users from games if they disconnect.
+The new game is then added to the `game_list` map where the key is generated from an `atomic_uint32_t`, this guarantees that each pending game has a unique number with an upper limit of no more than $4 \times {10^9}$ games being pending at one time. Invited players are then messaged, and the game id is added to the `games` vector inside of their `player_data`. Game invitations and active games are stored in the player's data to allow the server to cleanup active and pending games upon client termination.
 
 Finally a new thread is created running the `handle_game` function which used to handle game creation and initiation logic.
 
 #### Game Launching
 
-The `handle_game` function first goes into a 30 second timeout to give players a chance to accept the game request. After 30 seconds the game is removed from the `game_list` to prevent late accept or decline messages. Following this the function collects the list of accepting players, if less then 2 an error message is sent to the user.
+The `handle_game` function first goes into a 30 second timeout to give players a chance to accept the game request. After 30 seconds the game is removed from the `game_list` to prevent late accept or decline messages. Following this the function collects the list of accepting players, if less than 2 players accept then an error message is sent to the client.
 
 ```{.cpp .numberLines}
 void handle_game(int game_id) {
@@ -235,10 +248,9 @@ The participating IPs and port numbers are stored in the `buffer` member variabl
 
 ### Quickplay
 
-The quickplay implementation is almost identical to that of Battle. The primary difference is that game arguments and players are generated by the server rather than being included in the player arguments. 
+The quickplay implementation is almost identical to that of Battle. The primary difference is that game arguments and players are generated by the server rather than being included in the command arguments. 
 
 ```{.cpp .numberLines}
-
 std::random_device rd;
 std::mt19937 gen(rd());
 std::uniform_int_distribution<> game_distribution(0, 2); // Valid Gamemodes
@@ -252,15 +264,17 @@ switch (gamemode) {
 
     } break;
     case FAST_TRACK: {
-        std::uniform_int_distribution<> line_distribution(0,10); // 0-10 lines
+        std::uniform_int_distribution<> line_distribution(1,10); // 1-10 lines
         new_game.arg1 = line_distribution(gen); // Baselines
         new_game.arg2 = line_distribution(gen); // Winlines
     } break;
 ```
 
-Parameter randomisation was rather implemented by switching over the current gamemode, and generating random numbers in a range deemed reasonable for the respective parameter. In the code snippet above the time duration for a boomer game is being set in the range of 30 seconds to 5 minutes. 
+Parameter randomisation was implemented by switching over the current gamemode, and generating random numbers in a range deemed reasonable for the respective parameter. In the code snippet above the time duration for a boomer game is being set in the range of 30 seconds to 5 minutes. 
 
-Given an iterator number $n$ the `advance` function can be used to get the $n+k$ iterator, and since c++ maps implement iterators this can be used to generate random players. The implementation locks the `player_list` and then generates a random offset from the start of the list, if the player is not the game creator or an already selected player they are added to the invite list.
+Given an iterator number $n$ the `advance` function can be used to get the $n+k$ iterator, and since c++ maps implement iterators this can be used to generate random players. The implementation locks the `player_list` and then generates a random offset from the start of the list, if the player is not the game creator or an already selected player then they are added to the invite list. After this point the `game` object is configured and the implementation is identical to that of Battle.
+
+
 
 ```{.cpp .numberLines}
 vector<int> offsets;
@@ -278,16 +292,13 @@ while (new_game.players.size() < msg->arg1) {
 player_list_mutex.unlock();
 
 ```
-
-At this point the `game` object is configured and the implementation is identical to that of Battle.
-
 ### Chill
 
 The `!chill` command is used by clients to initiate a single player game. The server creates a `game_data` struct to store the game information, and places it in the `chill_games` map. Players are sent an `INIT_GAME` message with the chill gamemode, game id, and random seed.
 
 ### Gamestats
 
-The `!gamestats` command is indented to output the individual player scores and lines cleared during a game. Since the list of active games is stored in the `ongoing_games` map, the selected game can be pulled from there before formatting the scores and sending a message back to the user. If the selected gamemode does not exist then the server will send an error message to the client.
+The `!gamestats` command is indented to output the individual player scores and lines cleared for all active games. Since the list of active games is stored in the `ongoing_games` map, then games can be iterated over where the scores will be forematted and sent to the user.
 
 ### Go
 
@@ -315,7 +326,7 @@ send_chat(sock, str); // Sending outside of critical section
 
 ### Ignore
 
-The `!ignore` command allows users to decline invitations to games. The processing of the command is identical to that of the `!go` command, except the boolean for accepting is set to false.
+The `!ignore` command allows users to decline invitations to games. The processing of the command is identical to that of the `!go` command, with the boolean invitation acceptance being set to false rather than true.
 
 \newpage
 
@@ -361,6 +372,12 @@ This functionality is wrapped inside a lambda function so that the player can be
 
 ## Client-Server
 
+Client server connectivity is implemented in the `src/client-server` directory. The library exposes functions for connecting to the connecting to the server as well as sending or recieving messages.
+
+- `establish_connection` is used to open a TCP socket with the server, where the return of the function is the file descriptor fro the function. 
+- `parse_message` is used to parse strings into `tmessage` messages to be send to the server. The implementation relies of regex to ensure proper message formatting.
+- `decode_message` is used to decode received messages from network byte ordering to host byte ordering
+- `encode_message` is used to encode `tmessage` struct into network byte ordering from host byte ordering.
 
 \newpage
 ## Client-Client
@@ -369,7 +386,7 @@ Peer to peer connectivity is implemented in the `src/p2p` directory.
 
 The main component of the library is the `communicate_state` function. The function is designed to take a `gamestate` struct which contains the information used during a game. This struct is passed by reference to the function by the tetris games to ensure that the information can be read properly. The function is designed to establish the necessary sockets to send or recieve state from peers during the game. Once the sockets have been established then `receive_state` and `broadcast_state` are called.
 
-`recieve_state` is used to retrieve game updates from peers, and update the `gamestate` with the new information. Since peer information is only updated by the `recieve_state` function and tetris games will only be reading the information contained, mutual exclusion was not required during reads or writes.
+`recieve_state` is used to retrieve game updates from peers and update the `gamestate` with the new information. Peer information is only updated by the `recieve_state` function with local stats only being updated by the tetris games as such mutual exclusion was not required in this case.
 
 ```{.cpp .numberLines}
 update_msg *msg = (update_msg *)buffer;
@@ -386,9 +403,9 @@ if (state.players.find(msg->player_no) != state.players.end()) {
 
 ```
 
-`broadcast_state` is used to send the current `gamestate` information to all peers every 25 milliseconds, and to the server every one second. The information is sent in the form of an `update_msg` struct to peers and a `tmessage` to the server. To increase the frequency of updates a `TICKRATE` macro is defined in the headerfile, this alters the number of updates to peers per second.
+`broadcast_state` is used to send the current `gamestate` information to all peers every 25 milliseconds, and to the server every one second. The information is sent in the form of an `update_msg` struct to peers and a `tmessage` to the server. To increase the frequency of updates a `TICKRATE` macro is defined in the `p2p.hh` header file which alters the number of updates to peers per second.
 
-```{.cpp}
+```{.cpp .numberLines}
  while (1) {
     if (*termination_flag) {
       break;
@@ -400,13 +417,7 @@ if (state.players.find(msg->player_no) != state.players.end()) {
     msg.player_no = state.player_no;
     encode_state(msg);
     for (auto &[sock, other] : peers) {
-      int num_bytes;
-      if (sendto(sock, (char *)&msg, sizeof(update_msg), 0,
-                 (struct sockaddr *)&other, sizeof(other)) == -1) {
-        close(sock);
-        perror("sendto()");
-        return;
-      }
+      // send data to peer
     }
     if (counter == 0) {
       tmessage server_msg;
@@ -417,18 +428,22 @@ if (state.players.find(msg->player_no) != state.players.end()) {
       send(sock_fd, (char *)&server_msg, sizeof(server_msg), 0);
     }
 
-    this_thread::sleep_for(
-        TICKDURATION);  
+    this_thread::sleep_for(TICKDURATION); // Tick duration = 1s / tickspeed
 }
 ```
 
-Terminating threads safely in c++ is slightly more cumbersome than with native POSIX threads. To work around this problem a `termination_flag` is used to tell the threads if they need to terminate, the flag is set by tetris games when the player loses or wins their match. This ensures that all threads are cleaned up properly and the cleanup code is self contained within the function.
+Terminating threads safely in c++ is slightly more cumbersome than with native POSIX threads. To work around this problem a `termination_flag` is used to inform threads when they need to terminate, the flag is set by tetris games when the player either wins or loses the match. This ensures that all threads are cleaned up properly and the cleanup code is self contained within the function.
+
+An alternative implementation involved using `native_handle`, however this proved to be rather messier and inelegant.
 
 \newpage
 
 # Client Front-end 
 
-The client front-end consists of two distinct components, the chat client used to send and display messages, and the individual games implemented with being implemented using `ncurses`. 
+The client front-end consists of two distinct components;
+
+- The chat client used to send and display messages
+- The tetris games 
 
 On startup the client uses the `establish_connection` command to open a TCP socket with the server. The arguments to the command are the servers hostname, as well as the port, both of which should be passed by the command line.
 
@@ -497,7 +512,7 @@ case CHAT: {
 
 ### Game Messages
 
-Games starts are triggered by recieving `INIT_GAME` messages from the server. The message structure contains all the information to start the game;
+Tetris games are triggered by recieving `INIT_GAME` messages from the server, this applies to both single and multiplayer games. The message structure contains all the information to start the game;
 
 1. Player number
 2. Gamemode
@@ -550,21 +565,21 @@ while (do_gametick(new_piece, piece_flag, counter) == 0 &&
 
 Rising tide requires that all lines completed by other players are transferred to your own board.
 
-This functionality was implemented by keeping track of the total number of lines completed at each game tick, if on the new gametick more lines have been completed, then the lines are added to the players board. The `insert_lines` function was also implemented to handle the logic of inserting lines and managing the pieces.
+This functionality was implemented by keeping track of the total number of lines completed at each game tick. If on the new gametick more lines have been completed then the lines are added to the players board. The `insert_lines` function was also implemented to handle the logic of inserting lines and managing the pieces.
 
 
 ```{.cpp .numberLines}
 while (do_gametick(new_piece, piece_flag, counter) == 0) {
     new_lines = 0;
-    if (state.players.size()) { // Only checking lines if there are lines to check
-      old_lines = total_lines; // Noting the previous number of lines completed
+    if (state.players.size()) {   // Only checking lines if there are lines to check
+      old_lines = total_lines;    // Noting the previous number of lines completed
       total_lines = 0;
       for (auto &[k, v] : state.players) {
-        total_lines += v.lines; // Calculating the total number of lines completed
+        total_lines += v.lines;   // Calculating the total number of lines completed
       }
       new_lines = total_lines - old_lines; // Calculating the new lines completed
       if (new_lines > 0) {
-        if (insert_lines() != 0) { // Inserting the lines
+        if (insert_lines() != 0) {  // Inserting the lines
         /*
         * Cleanup current piece
         */
@@ -573,7 +588,7 @@ while (do_gametick(new_piece, piece_flag, counter) == 0) {
 
 ### Fast Track
 
-The fast track gamemode the playing field is initially populated with a number of rows and the game ends when the player completed a stipulated number of lines or loses.
+In the fast track gamemode the playing field is initially populated with a number of rows and the game ends when the player either completes the stipulated number of lines or loses.
 
 Filling the board was a trivial implementation and involved setting all the columns in the specified rows to an unclearable number.
 

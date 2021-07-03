@@ -15,7 +15,7 @@
 #define QUEUE_SIZE 5
 #define MESSAGE_SIZE 255
 #define NAMESIZE 10
-#define LOBBY_TIME 30
+#define LOBBY_TIME 10
 #define PRIVATE_P2P 50000  // Using a linux private port
 #define PUBLIC_P2P 42000   // Using a Linux user port
 #define LOCALHOST 16777343 // Integer representation of localhost ip

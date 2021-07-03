@@ -18,8 +18,8 @@ using namespace std;
 
 int main(int argc, char *argv[]) {
 
-  char *hostname = argv[1];
-  char *port = argv[2];
+  const char *hostname = "localhost";
+  const char *port = "42069";
   int sockfd = establish_connection(hostname, port);
 
   start_irc();

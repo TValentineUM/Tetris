@@ -15,7 +15,7 @@
 #include <unistd.h> // Linux fds
 using namespace std;
 
-int establish_connection(char *hostname, char *port) {
+int establish_connection(const char *hostname, const char *port) {
   int sockfd;
   struct addrinfo hints, *servinfo, *p;
   memset(&hints, 0, sizeof hints);

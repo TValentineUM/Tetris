@@ -32,7 +32,7 @@ using namespace std;
 static vector<string> chat_messages;
 static mutex message_lock;
 
-int establish_connection(char *hostname, char *port);
+int establish_connection(const char *hostname, const char *port);
 tmessage parse_message(string);
 tmessage *decode_message(tmessage *);
 void encode_message(tmessage &);

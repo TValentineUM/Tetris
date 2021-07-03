@@ -12,9 +12,9 @@ using namespace std;
 TetrisGame::TetrisGame(int seed, vector<pair<string, string>> ips,
                        int player_no, int game_no, int server_socket)
     : playing_field{vector<vector<char>>(ROWS, vector<char>(COLUMNS, 0))},
-      next_piece{tetrominos[seed % 7]},
-      distrib{uniform_int_distribution<>(0, 6)}, rng{mt19937(seed)}, score{0},
-      lines_cleared{0}, ips{ips}, seed{seed}, server_socket{server_socket} {
+      next_piece{tetrominos[0]}, distrib{uniform_int_distribution<>(0, 6)},
+      rng{mt19937(seed)}, score{0}, lines_cleared{0}, ips{ips}, seed{seed},
+      server_socket{server_socket} {
   state.player_no = player_no;
   state.game_no = game_no;
 }

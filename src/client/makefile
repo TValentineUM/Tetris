@@ -5,7 +5,7 @@
 # @version 0.1
 
 CXX=clang++
-CXXFLAGS=-I -Wall -std=c++17
+CXXFLAGS=-I -Wall -std=c++17 -g
 
 CLIENT_SERVER_DEPS = ../client-server/client-server.hh
 CLIENT_SERVER_OBJ = ../client-server/client-server.o

@@ -327,6 +327,7 @@ void handle_message(tmessage *msg, int sock) {
       game->second.finished_player(sock, score, lines);
     }
     ongoing_game_mutex.unlock();
+
     chill_games_mutex.lock();
     if (chill_games.find(game_number) != chill_games.end()) {
       auto game = chill_games.find(game_number);
@@ -347,7 +348,7 @@ void handle_message(tmessage *msg, int sock) {
                                       player->second.games.end(), game_number),
                                player->second.games.end());
     player_list_mutex.unlock();
-  }
+  } break;
   case SCORE_UPDATE: {
     int game_number = msg->arg1;
     int score = msg->arg2;
@@ -492,7 +493,7 @@ void handle_message(tmessage *msg, int sock) {
         vector<string> messages = v.get_info();
         string title = "Game: " + to_string(k);
         messages.insert(messages.begin(), title);
-        send_multiple(sock, v.get_info());
+        send_multiple(sock, messages);
       }
     } else {
       send_chat(sock, "No games in progress");
@@ -905,10 +906,9 @@ void active_game::update_player(int player_no, int score, int lines) {
 
 vector<string> active_game::get_info() {
   vector<string> info;
-  auto formatted_out = [](int p1, int p2, int p3) {
+  auto formatted_out = [](string p1, int p2, int p3) {
     stringstream ss;
-    ss << left << setw(NAMESIZE + 4) << setfill(' ')
-       << "Player: " + to_string(p1);
+    ss << left << setw(NAMESIZE + 4) << setfill(' ') << "Player: " + p1;
     ss << left << setw(NAMESIZE + 4) << setfill(' ')
        << "Score: " + to_string(p2);
     ss << left << setw(NAMESIZE + 4) << setfill(' ')
@@ -916,7 +916,11 @@ vector<string> active_game::get_info() {
     return ss.str();
   };
   for (auto &[k, v] : state) {
-    info.push_back(formatted_out(k, get<0>(v).score, get<0>(v).lines));
+    auto player = player_list.find(k);
+    if (player != player_list.end()) {
+      info.push_back(
+          formatted_out(player->second.name, get<0>(v).score, get<0>(v).lines));
+    }
   }
   return info;
 }
