@@ -221,16 +221,14 @@ tmessage parse_message(string str) {
   }
 }
 
-tmessage *decode_message(tmessage *buffer) {
-  tmessage *msg = (tmessage *)buffer;
-  msg->message_type = (tmessage_t)ntohl((int32_t)msg->message_type);
-  msg->arg1 = ntohl(msg->arg1);
-  msg->arg2 = ntohl(msg->arg2);
-  msg->arg3 = ntohl(msg->arg3);
-  msg->arg4 = ntohl(msg->arg4);
-  msg->arg5 = ntohl(msg->arg5);
-  msg->arg6 = ntohl(msg->arg6);
-  return msg;
+void decode_message(tmessage &msg) {
+  msg.message_type = (tmessage_t)ntohl((int32_t)msg.message_type);
+  msg.arg1 = ntohl(msg.arg1);
+  msg.arg2 = ntohl(msg.arg2);
+  msg.arg3 = ntohl(msg.arg3);
+  msg.arg4 = ntohl(msg.arg4);
+  msg.arg5 = ntohl(msg.arg5);
+  msg.arg6 = ntohl(msg.arg6);
 }
 
 void encode_message(tmessage &msg) {
@@ -241,4 +239,30 @@ void encode_message(tmessage &msg) {
   msg.arg4 = htonl(msg.arg4);
   msg.arg5 = htonl(msg.arg5);
   msg.arg6 = htonl(msg.arg6);
+}
+
+int send_message(tmessage &msg, int sock_fd) {
+  if (send(sock_fd, (char *)&msg, sizeof(tmessage), 0) < 0) {
+    perror("ERROR writing to socket");
+    close(sock_fd);
+    return EXIT_FAILURE;
+  }
+  return EXIT_SUCCESS;
+}
+
+int recieve_message(tmessage &msg, int sock_fd) {
+  char buffer[sizeof(tmessage)];
+  int num_bytes = recv(sock_fd, buffer, sizeof(tmessage), 0);
+  if (num_bytes < 0) {
+    perror("Error reading from scoket");
+    close(sock_fd);
+    return EXIT_FAILURE;
+  } else if (num_bytes == 0) {
+    cout << "Server Disconnected" << endl;
+    close(sock_fd);
+    return 2;
+  }
+  msg = *(tmessage *)&buffer;
+  decode_message(msg);
+  return EXIT_SUCCESS;
 }

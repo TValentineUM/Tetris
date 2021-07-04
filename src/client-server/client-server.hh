@@ -34,7 +34,9 @@ static mutex message_lock;
 
 int establish_connection(const char *hostname, const char *port);
 tmessage parse_message(string);
-tmessage *decode_message(tmessage *);
+void decode_message(tmessage *);
 void encode_message(tmessage &);
+int send_message(tmessage &, int);
+int recieve_message(tmessage &, int);
 
 #endif // CLIENT_H_

@@ -42,12 +42,10 @@ void send_message(int sockfd) {
   // Checking theere is actual data to send
   if (strlen(buffer)) {
     tmessage msg = parse_message(buffer);
-    if (send(sockfd, (char *)&msg, sizeof(tmessage), 0) < 0) {
-      perror("ERROR writing to socket");
-      close(sockfd);
+    if (send_message(msg, sockfd) == EXIT_FAILURE) {
       endwin();
-      exit(1);
-    }
+      exit(EXIT_FAILURE);
+    };
   }
   wrefresh(text_window);
 }
@@ -68,32 +66,24 @@ void recieve_message(int sockfd) {
   int xMax, yMax;
   getmaxyx(stdscr, yMax, xMax);
 
-  char *buffer = (char *)malloc(sizeof(tmessage));
-  int numbytes = recv(sockfd, (char *)buffer, sizeof(tmessage), 0);
-
-  if (numbytes == 0) {
-    endwin();
-    cout << "Server Disconnected" << endl;
-    close(sockfd);
-    exit(0);
-  } else if (numbytes < 0) {
-    endwin();
-    perror("ERROR reading from socket");
-    close(sockfd);
-    exit(1);
+  tmessage msg;
+  int rv;
+  if ((rv = recieve_message(msg, sockfd)) != 0) {
+    if (rv == 2) {
+      exit(EXIT_SUCCESS);
+    } else {
+      exit(EXIT_FAILURE);
+    }
   }
-  tmessage *msg = (tmessage *)buffer;
-  decode_message(msg);
-  switch (msg->message_type) {
+
+  switch (msg.message_type) {
   case CHAT: {
-    chat_messages.push_back(string(msg->buffer));
+    chat_messages.push_back(string(msg.buffer));
     wclear(chat_window);
     box(chat_window, 0, 0);
 
     if (chat_messages.size() > (yMax - 12)) {
-      chat_messages.erase(chat_messages.begin(),
-                          chat_messages.begin() +
-                              (chat_messages.size() - (yMax - 12)));
+      chat_messages.erase(chat_messages.begin());
     }
     for (int i = 0; i < chat_messages.size(); i++) {
       mvwprintw(chat_window, i + 1, 1, chat_messages[i].c_str());
@@ -104,27 +94,27 @@ void recieve_message(int sockfd) {
   case INIT_GAME: {
     erase();
 
-    auto ips = decode_hostnames(string(msg->buffer));
+    auto ips = decode_hostnames(string(msg.buffer));
     gamestate score;
-    switch (msg->arg2) {
+    switch (msg.arg2) {
     case BOOMER: {
-      BoomerGame game(msg->arg6, ips, msg->arg1, msg->arg3, sockfd, msg->arg4);
+      BoomerGame game(msg.arg6, ips, msg.arg1, msg.arg3, sockfd, msg.arg4);
       game.run();
       score = game.get_final_score();
     } break;
     case RISING_TIDE: {
-      RisingTide game(msg->arg6, ips, msg->arg1, msg->arg3, sockfd);
+      RisingTide game(msg.arg6, ips, msg.arg1, msg.arg3, sockfd);
       game.run();
       score = game.get_final_score();
     } break;
     case FAST_TRACK: {
-      FastTrack game(msg->arg6, ips, msg->arg1, msg->arg3, sockfd, msg->arg4,
-                     msg->arg5);
+      FastTrack game(msg.arg6, ips, msg.arg1, msg.arg3, sockfd, msg.arg4,
+                     msg.arg5);
       game.run();
       score = game.get_final_score();
     } break;
     case CHILLER: {
-      TetrisGame game(msg->arg6);
+      TetrisGame game(msg.arg6);
       game.run();
       score = game.get_final_score();
     }
@@ -133,16 +123,14 @@ void recieve_message(int sockfd) {
     }
     tmessage reply_msg;
     reply_msg.message_type = GAME_END;
-    reply_msg.arg1 = msg->arg3; // Game ID
+    reply_msg.arg1 = msg.arg3; // Game ID
     reply_msg.arg2 = score.local.score;
     reply_msg.arg3 = score.local.lines;
     encode_message(reply_msg);
-    if (send(sockfd, (char *)&reply_msg, sizeof(tmessage), 0) < 0) {
-      perror("ERROR writing to socket");
-      close(sockfd);
-      endwin();
-      exit(1);
-    }
+    if (send_message(reply_msg, sockfd) != 0) {
+      exit(EXIT_FAILURE);
+    };
+
     erase();
     refresh_irc();
     wclear(chat_window);
@@ -156,5 +144,4 @@ void recieve_message(int sockfd) {
   default:
     break;
   }
-  free(buffer);
 }
