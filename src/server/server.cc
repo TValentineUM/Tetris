@@ -175,20 +175,34 @@ void handle_message(tmessage *msg, int sock) {
     str = "Updated Nickname to: " + string(msg->buffer);
     // If an error is encountred str will be updated to the error message
 
-    player_list_mutex.lock();
+    if (strlen(msg->buffer) > NAMESIZE) {
+      send_chat(sock, "Name too long");
+      break;
+    } else {
+      player_list_mutex.lock();
+      string name(msg->buffer);
+      auto name_check = [name](tuple<int, player_data> p) {
+        return name == string(get<1>(p).name);
+      };
+      auto player = find_if(player_list.begin(), player_list.end(), name_check);
+      if (player != player_list.end()) {
+        str = "Player name currently in use";
+      } else {
+        player = player_list.find(sock);
+        if (player != player_list.end()) {
+          strcpy(player->second.name, msg->buffer);
+        }
+      }
+      player_list_mutex.unlock();
 
-    auto iter = player_list.find(sock);
-    if (iter != player_list.end()) {
-      strcpy(iter->second.name, msg->buffer);
+      send_chat(sock, str);
     }
-    player_list_mutex.unlock();
-
-    send_chat(sock, str);
     break;
   }
   case PLAYERS: {
     string str("Players Online: ");
     player_list_mutex.lock();
+
     for (auto &[k, v] : player_list) {
       str.append(v.name);
       str.append("; ");
