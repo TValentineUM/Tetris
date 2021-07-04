@@ -4,19 +4,19 @@
 # @file
 # @version 0.1
 
-CXX=clang++
-CXXFLAGS=-I -Wall -std=c++17 -g -pthread -fsanitize=address
+CXX=g++
+CXXFLAGS=-I -Wall -std=c++17 -g
 DEPS = server.hh tprotocol.hh
-OBJ = server.cc
+OBJ = server.o
 MAINOBJ = main.o $(OBJ)
 
 %.o: %.cc $(DEPS)
 	$(CXX) -c $< -o $@  $(CXXFLAGS)
 
 main: $(MAINOBJ)
-		$(CXX) -o $@ $^ $(CXXFLAGS)
+		$(CXX) -o server $^ $(CXXFLAGS) -lpthread
 
+.PHONY: clean
 clean:
-	rm *.o
-
+	-rm -f server $(MAINOBJ)
 # end

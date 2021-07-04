@@ -10,6 +10,7 @@
 #include <curses.h>
 #include <iostream>
 #include <sys/socket.h>
+#include <thread>
 #include <unistd.h>
 using namespace std;
 
@@ -33,6 +34,22 @@ void start_irc() {
   wrefresh(text_window);
 }
 
+void display_chat() {
+  wclear(chat_window);
+  box(chat_window, 0, 0);
+
+  int yMax;
+  yMax = getmaxy(stdscr);
+
+  if (chat_messages.size() > (yMax - 12)) {
+    chat_messages.erase(chat_messages.begin());
+  }
+  for (int i = 0; i < chat_messages.size(); i++) {
+    mvwprintw(chat_window, i + 1, 1, chat_messages[i].c_str());
+  }
+  wrefresh(chat_window);
+}
+
 void send_message(int sockfd) {
   char buffer[MESSAGE_LENGTH];
   memset(buffer, 0, MESSAGE_LENGTH * sizeof(char));
@@ -41,11 +58,19 @@ void send_message(int sockfd) {
   box(text_window, 0, 0);
   // Checking theere is actual data to send
   if (strlen(buffer)) {
-    tmessage msg = parse_message(buffer);
-    if (send_message(msg, sockfd) == EXIT_FAILURE) {
-      endwin();
-      exit(EXIT_FAILURE);
-    };
+    try {
+      tmessage msg = parse_message(buffer);
+      if (send_message(msg, sockfd) == EXIT_FAILURE) {
+        endwin();
+        exit(EXIT_FAILURE);
+      }
+    } catch (exception &err) {
+      chat_messages.push_back(err.what());
+      display_chat();
+      this_thread::sleep_for(chrono::seconds(3));
+      chat_messages.pop_back();
+      display_chat();
+    }
   }
   wrefresh(text_window);
 }
@@ -79,16 +104,7 @@ void recieve_message(int sockfd) {
   switch (msg.message_type) {
   case CHAT: {
     chat_messages.push_back(string(msg.buffer));
-    wclear(chat_window);
-    box(chat_window, 0, 0);
-
-    if (chat_messages.size() > (yMax - 12)) {
-      chat_messages.erase(chat_messages.begin());
-    }
-    for (int i = 0; i < chat_messages.size(); i++) {
-      mvwprintw(chat_window, i + 1, 1, chat_messages[i].c_str());
-      wrefresh(chat_window);
-    }
+    display_chat();
     break;
   }
   case INIT_GAME: {
@@ -133,12 +149,7 @@ void recieve_message(int sockfd) {
 
     erase();
     refresh_irc();
-    wclear(chat_window);
-    box(chat_window, 0, 0);
-    for (int i = 0; i < chat_messages.size(); i++) {
-      mvwprintw(chat_window, i + 1, 1, chat_messages[i].c_str());
-      wrefresh(chat_window);
-    }
+    display_chat();
     break;
   }
   default:

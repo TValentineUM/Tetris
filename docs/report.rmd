@@ -26,6 +26,14 @@ header-includes:
 
 # Project Overview
 
+Super battle tetris required the implementation of multiple distinct components, each of which is implemented in its own sub-directory.
+
+- `src/client`: The client user interface implemented in `ncurses`
+- `src/tetris`: Implementation of the Tetris games using `ncurses`
+- `src/p2p`: Library used for peer-to-peer connectivity during tetris games
+- `src/client-server`: Library used to connect to the server, aswell as send/recieve messages.
+- `src/server`: The server
+
 
 
 \newpage
@@ -374,10 +382,23 @@ This functionality is wrapped inside a lambda function so that the player can be
 
 Client server connectivity is implemented in the `src/client-server` directory. The library exposes functions for connecting to the connecting to the server as well as sending or recieving messages.
 
-- `establish_connection` is used to open a TCP socket with the server, where the return of the function is the file descriptor fro the function. 
-- `parse_message` is used to parse strings into `tmessage` messages to be send to the server. The implementation relies of regex to ensure proper message formatting.
-- `decode_message` is used to decode received messages from network byte ordering to host byte ordering
-- `encode_message` is used to encode `tmessage` struct into network byte ordering from host byte ordering.
+### Connecting to the server
+
+Connecting to the server is handled by the `establish_connection` function. The function attempts to create a TCP socket with the server, who's ip and port number are passed as arguments to the function.
+
+By using the `getaddrinfo` command the client can even use DNS addresses for the server ip address or even "localhost" when on the same machine.
+
+### Sending Messages to the Server
+
+The `send_message` function is used to send `tmessage` struct to the server. Before sending the structs must first be passed through `encode_message` which is used to convert the structure into network byte ordering. 
+
+### Receiving Messages from the Server
+
+The `recieve_message` function is used to receive `tmessage` structs from the server. The structs will be automatically decoded from network byte ordering into host ordering by calling the `decode_message` function.
+
+### Chat/Command Encoding
+
+The `parse_message` function is used to convert strings (entered by the user) into `tmessage` structs. Message parsing was implemented client side to reduce the load in the server. If an unknown or malformed command string is passed to the function an exception will be thrown, this exception can then be caught and the message can be displayed to the user.
 
 \newpage
 ## Client-Client
@@ -605,3 +626,18 @@ while (do_gametick(new_piece, piece_flag, counter) == 0 &&
          lines_cleared < win_lines) {
 }
 ```
+
+\newpage
+
+# Compiling and Running
+
+The source code for the implementation can be found in the `src` directory of the folder.
+
+- `src/client`: The client user interface
+- `src/tetris`: Implementation of the Tetris games
+- `src/p2p`: Library used for peer-to-peer connectivity during tetris games
+- `src/client-server`: Library used to connect to the server, aswell as send/recieve messages.
+- `src/server`: The server
+
+To compile the implementations a `compile.sh` script is included in the root directory. The script will compile the server into `src/server/server`, and the client into `src/client/client`. Before compiling the `client` program users are given the choice between compiling with `client-server` and `p2p` as shared libraries. This choice was made as the assignment specified their implementation as shared libraries. If you experience any issues compiling with shared libraries please select `N` when prompted.
+

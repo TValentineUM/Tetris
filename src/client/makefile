@@ -4,16 +4,18 @@
 # @file
 # @version 0.1
 
-CXX=clang++
+CXX=g++
 CXXFLAGS=-I -Wall -std=c++17 -g
 
 CLIENT_SERVER_DEPS = ../client-server/client-server.hh
 CLIENT_SERVER_OBJ = ../client-server/client-server.o
 CLIENT_SERVER_LIB = ../client-server/libcliser.so
+CLISER_LINK = -L../client-server/ -Wl,-rpath=../client-server/
 
 P2P_DEPS = ../p2p/p2p.hh
 P2P_OBJ = ../p2p/p2p.o
 P2P_LIB = ../p2p/libp2p.so
+P2P_LINK = -L../p2p/ -Wl,-rpath=../p2p/
 
 
 GAME_DEPS = ../tetris/tetris_game.hh ../tetris/pieces.hh ../tetris/boomer.hh ../tetris/fasttrack.hh ../tetris/risingtide.hh
@@ -23,6 +25,7 @@ DEPS =  client.hh $(CLIENT_SERVER_DEPS) $(GAME_DEPS) $(P2P_DEPS) ../server/tprot
 
 MAINOBJ = main.o client.o $(GAME_OBJ)
 
+ALL_OBJ = $(MAINOBJ) $(P2P_OBJ) $(CLIENT_SERVER_OBJ)
 
 .PHONY: all
 all: p2p cliser main
@@ -43,11 +46,15 @@ cliser: $(DEPS)
 		$(CXX) -c $< -o $@  $(CXXFLAGS)
 
 main: $(MAINOBJ)
-		$(CXX) -L../client-server/ -Wl,-rpath=./../client-server/ -L../p2p/ -Wl,-rpath=../p2p/ -o $@ $^ $(CXXFLAGS)  -lncurses -lpthread -lp2p -lcliser
+		$(CXX) $(CLISER_LINK) $(P2P_LINK) -o client $^ $(CXXFLAGS)  -lncurses -lpthread -lp2p -lcliser
+
+.PHONY:
+normal: $(ALL_OBJ)
+		$(CXX) -o client $^ $(CXXFLAGS) -lncurses -lpthread
 
 .PHONY: clean
 clean:
-	-rm -f main $(MAINOBJ) $(P2P_OBJ) $(CLIENT_SERVER_OBJ) $(P2P_LIB) $(CLIENT_SERVER_LIB)
+	-rm -f client $(MAINOBJ) $(P2P_OBJ) $(CLIENT_SERVER_OBJ) $(P2P_LIB) $(CLIENT_SERVER_LIB)
 
 
 # end
